@@ -64,7 +64,7 @@ from .mediathek import (
     _mvw_query,
 )
 from .player import play_stream
-from .downloader import Downloader, get_save_dir, set_save_dir, get_content_length, format_size
+from .downloader import Downloader, get_save_dir, set_save_dir, format_size
 from .download_manager import OeMediathekDownloadManagerScreen
 
 LOGO_DIR = os.path.join(os.path.dirname(__file__), "logos")
@@ -537,20 +537,20 @@ class OeMediathekMainScreen(Screen):
             sw, sh = 1920, 1080
             hdr_y, hdr_h = 30, 80
             font_title = 44
-            bar_y, bar_h = 960, 100
-            font_hint = 32
-            font_page = 36
-            hint_w = 1560
-            page_x, page_w = 1620, 240
+            # bar_y, bar_h = 960, 100
+            # font_hint = 32
+            # font_page = 36
+            # hint_w = 1560
+            # page_x, page_w = 1620, 240
         else:
             sw, sh = 1280, 720
             hdr_y, hdr_h = 20, 53
             font_title = 29
-            bar_y, bar_h = 640, 66
-            font_hint = 21
-            font_page = 24
-            hint_w = 1040
-            page_x, page_w = 1080, 160
+            # bar_y, bar_h = 640, 66
+            # font_hint = 21
+            # font_page = 24
+            # hint_w = 1040
+            # page_x, page_w = 1080, 160
 
         margin = 30 if IS_FHD else 20
 
@@ -684,7 +684,7 @@ class OeMediathekMainScreen(Screen):
 
     def _refresh_page(self):
         """Kacheln und Logos der aktuellen Seite neu befuellen."""
-        offset = self.main_page * TILES_PER_PAGE
+        # offset = self.main_page * TILES_PER_PAGE
         for i in range(TILES_PER_PAGE):
             # Logo leeren — wird danach neu gesetzt
             try:

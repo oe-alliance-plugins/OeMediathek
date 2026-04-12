@@ -5,6 +5,14 @@
 import json
 import os
 
+from urllib.request import urlopen, Request
+
+try:
+    import ssl
+    _ssl_context = ssl._create_unverified_context()
+except Exception:
+    _ssl_context = None
+
 LOG_FILE = "/tmp/oemediathek.log"
 FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
 DEBUG = False
@@ -51,15 +59,6 @@ def _log(msg):
             f.write(line + "\n")
     except Exception:
         pass
-
-
-from urllib.request import urlopen, Request
-
-try:
-    import ssl
-    _ssl_context = ssl._create_unverified_context()
-except Exception:
-    _ssl_context = None
 
 
 # ------------------------------------------------------------------
@@ -169,7 +168,7 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
 
         try:
             duration = int(duration)
-        except:
+        except Exception:
             duration = 0
 
         if duration > 0:
