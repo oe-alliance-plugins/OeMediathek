@@ -2,6 +2,11 @@
 
 # <p align="center">OeMediathek Plugin for Enigma2 (E²) ![GitHub repo size](https://img.shields.io/github/repo-size/oe-alliance-plugins/OeMediathek.svg)</p>
 
+Enigma2-Plugin zum Streamen der öffentlich-rechtlichen Mediatheken
+
+Inhalte aller deutschen öffentlich-rechtlichen Sender stehen über die gemeinsame Suche zur Verfügung. Folgende Sender haben zusätzlich eine eigene Mediathek-Ansicht: ARD, ZDF, Arte, 3sat, NDR, WDR, BR, MDR, HR, SWR, RBB, SR, ZDFinfo, ZDFneo, KiKA, Phoenix, Radio Bremen, funk, ARD alpha, ONE, tagesschau24, DW
+
+
 
 ## Github status
 [![Build](https://github.com/oe-alliance-plugins/OeMediathek/actions/workflows/buildbot.yml/badge.svg)](https://github.com/oe-alliance-plugins/OeMediathek/actions/workflows/buildbot.yml)
