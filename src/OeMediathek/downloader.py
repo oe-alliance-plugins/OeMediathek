@@ -19,12 +19,13 @@ try:
 except Exception:
     _ssl_context = None
 
-SETTINGS_FILE    = "/etc/enigma2/oemediathek_settings.json"
+SETTINGS_FILE = "/etc/enigma2/oemediathek_settings.json"
 DEFAULT_SAVE_DIR = "/media/hdd/movie/OeMediathek"
 
 # --------------------------------------------------------------------------
 # Settings
 # --------------------------------------------------------------------------
+
 
 def load_settings():
     try:
@@ -131,16 +132,16 @@ class Downloader(object):
     CHUNK_SIZE = 256 * 1024  # 256 KB pro Chunk
 
     def __init__(self, url, title, topic=None, on_progress=None, on_done=None, on_error=None):
-        self.url         = url
-        self.title       = title
+        self.url = url
+        self.title = title
         self.on_progress = on_progress
-        self.on_done     = on_done
-        self.on_error    = on_error
+        self.on_done = on_done
+        self.on_error = on_error
 
-        self._cancelled  = False
-        self._thread     = None
+        self._cancelled = False
+        self._thread = None
         self._downloaded = 0
-        self._total      = 0
+        self._total = 0
 
         save_dir = get_save_dir()
         filename = _make_filename(title, url, topic=topic)
@@ -189,7 +190,7 @@ class Downloader(object):
                     f.write(chunk)
                     downloaded += len(chunk)
                     self._downloaded = downloaded
-                    self._total      = total
+                    self._total = total
                     if self.on_progress:
                         self.on_progress(downloaded, total)
 

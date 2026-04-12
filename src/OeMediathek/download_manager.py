@@ -68,25 +68,25 @@ class OeMediathekDownloadManagerScreen(Screen):
 
         # Referenzen auf die globalen Objekte aus plugin.py
         self._get_active = active_downloader_ref
-        self._get_queue  = queue_ref
+        self._get_queue = queue_ref
 
-        self["title_label"]    = Label(_b("Download-Manager"))
-        self["active_head"]    = Label(_b("Laufender Download:"))
-        self["active_label"]   = Label(_b(""))
+        self["title_label"] = Label(_b("Download-Manager"))
+        self["active_head"] = Label(_b("Laufender Download:"))
+        self["active_label"] = Label(_b(""))
         self["progress_label"] = Label(_b(""))
-        self["queue_head"]     = Label(_b("Warteschlange:"))
-        self["queue_label"]    = Label(_b(""))
-        self["hint_yellow"]    = Label(_b("Alles abbrechen"))
-        self["hint_red"]       = Label(_b("Aktuellen abbrechen"))
-        self["hint_exit"]      = Label(_b("EXIT = Schliessen"))
+        self["queue_head"] = Label(_b("Warteschlange:"))
+        self["queue_label"] = Label(_b(""))
+        self["hint_yellow"] = Label(_b("Alles abbrechen"))
+        self["hint_red"] = Label(_b("Aktuellen abbrechen"))
+        self["hint_exit"] = Label(_b("EXIT = Schliessen"))
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions"],
             {
                 "cancel": self.close,
-                "ok":     self.close,
+                "ok": self.close,
                 "yellow": self._cancel_all,
-                "red":    self._cancel_current,
+                "red": self._cancel_current,
             },
             -1,
         )
@@ -107,7 +107,7 @@ class OeMediathekDownloadManagerScreen(Screen):
     def _poll(self):
         try:
             active = self._get_active()
-            queue  = self._get_queue()
+            queue = self._get_queue()
 
             if active is None:
                 self["active_label"].setText(_b("Kein aktiver Download"))
@@ -121,7 +121,7 @@ class OeMediathekDownloadManagerScreen(Screen):
                 # Fortschritt aus dem Downloader lesen (thread-safe: nur lesen)
                 try:
                     dl_bytes = active._downloaded if hasattr(active, "_downloaded") else 0
-                    total    = active._total      if hasattr(active, "_total")      else 0
+                    total = active._total if hasattr(active, "_total") else 0
                     if total > 0:
                         pct = int(dl_bytes * 100 / total)
                         self["progress_label"].setText(_b("%d%% von %s" % (pct, format_size(total))))
