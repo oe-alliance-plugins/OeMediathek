@@ -6,6 +6,7 @@ import threading
 
 try:
     import traceback
+
     def _fmt_exc():
         return traceback.format_exc()
 except ImportError:
@@ -72,8 +73,8 @@ PAGE_SIZE = 500
 DEBUG = False
 
 # Download-Queue: aktiver Downloader, wartende Items, ausstehende Benachrichtigung
-_active_downloader  = None
-_download_queue     = []    # Liste von {"title": ..., "url": ..., "topic": ...}
+_active_downloader = None
+_download_queue = []    # Liste von {"title": ..., "url": ..., "topic": ...}
 _bg_download_result = None  # None | "ok" | "err:<meldung>"
 
 # Auflösungs-Weiche: True = FHD (1920×1080), False = HD (1280×720)
@@ -114,32 +115,32 @@ def _b(val):
 
 SOURCES = [
     # Seite 1
-    ("Meine Favoriten",  get_favorites,          "favorites.png"),
-    ("Alle Mediatheken", get_all_highlights,     "alle.png"),
-    ("ARD Mediathek",    get_ard_highlights,     "ard.png"),
-    ("ZDF Mediathek",    get_zdf_highlights,     "zdf.png"),
-    ("Arte",             get_arte_highlights,    "arte.png"),
-    ("3sat",             get_3sat_highlights,    "3sat.png"),
-    ("NDR Mediathek",    get_ndr_highlights,     "ndr.png"),
-    ("WDR Mediathek",    get_wdr_highlights,     "wdr.png"),
-    ("BR Mediathek",     get_br_highlights,      "br.png"),
+    ("Meine Favoriten", get_favorites, "favorites.png"),
+    ("Alle Mediatheken", get_all_highlights, "alle.png"),
+    ("ARD Mediathek", get_ard_highlights, "ard.png"),
+    ("ZDF Mediathek", get_zdf_highlights, "zdf.png"),
+    ("Arte", get_arte_highlights, "arte.png"),
+    ("3sat", get_3sat_highlights, "3sat.png"),
+    ("NDR Mediathek", get_ndr_highlights, "ndr.png"),
+    ("WDR Mediathek", get_wdr_highlights, "wdr.png"),
+    ("BR Mediathek", get_br_highlights, "br.png"),
     # Seite 2
-    ("MDR Mediathek",    get_mdr_highlights,     "mdr.png"),
-    ("HR Mediathek",     get_hr_highlights,      "hr.png"),
-    ("SWR Mediathek",    get_swr_highlights,     "swr.png"),
-    ("rbb Mediathek",    get_rbb_highlights,     "rbb.png"),
-    ("SR Mediathek",     get_sr_highlights,      "sr.png"),
-    ("ZDF Info",         get_zdfinfo_highlights, "zdfinfo.png"),
-    ("ZDF Neo",          get_zdfneo_highlights,  "zdfneo.png"),
-    ("KiKA",             get_kika_highlights,    "kika.png"),
-    ("Phoenix",          get_phoenix_highlights, "phoenix.png"),
+    ("MDR Mediathek", get_mdr_highlights, "mdr.png"),
+    ("HR Mediathek", get_hr_highlights, "hr.png"),
+    ("SWR Mediathek", get_swr_highlights, "swr.png"),
+    ("rbb Mediathek", get_rbb_highlights, "rbb.png"),
+    ("SR Mediathek", get_sr_highlights, "sr.png"),
+    ("ZDF Info", get_zdfinfo_highlights, "zdfinfo.png"),
+    ("ZDF Neo", get_zdfneo_highlights, "zdfneo.png"),
+    ("KiKA", get_kika_highlights, "kika.png"),
+    ("Phoenix", get_phoenix_highlights, "phoenix.png"),
     # Seite 3
-    ("Radio Bremen",     get_radio_bremen_highlights, "radio_bremen.png"),
-    ("funk",             get_funk_highlights,         "funk.png"),
-    ("ARD alpha",        get_ard_alpha_highlights,    "ard_alpha.png"),
-    ("ONE",              get_one_highlights,          "one.png"),
-    ("tagesschau24",     get_tagesschau24_highlights, "tagesschau24.png"),
-    ("DW",               get_dw_highlights,           "dw.png"),
+    ("Radio Bremen", get_radio_bremen_highlights, "radio_bremen.png"),
+    ("funk", get_funk_highlights, "funk.png"),
+    ("ARD alpha", get_ard_alpha_highlights, "ard_alpha.png"),
+    ("ONE", get_one_highlights, "one.png"),
+    ("tagesschau24", get_tagesschau24_highlights, "tagesschau24.png"),
+    ("DW", get_dw_highlights, "dw.png"),
 ]
 # Unveränderliche Kopie der Original-Reihenfolge für den Werksreset
 _SOURCES_DEFAULT = list(SOURCES)
@@ -162,34 +163,34 @@ TILE_POSITIONS = [(_TX[c], _TY[r]) for r in range(TILE_ROWS) for c in range(TILE
 CHANNEL_MAP = {
     "ARD Mediathek": "ARD",
     "ZDF Mediathek": "ZDF",
-    "Arte":          "ARTE",
-    "3sat":          "3Sat",
+    "Arte": "ARTE",
+    "3sat": "3Sat",
     "NDR Mediathek": "NDR",
     "WDR Mediathek": "WDR",
-    "BR Mediathek":  "BR",
+    "BR Mediathek": "BR",
     "MDR Mediathek": "MDR",
-    "HR Mediathek":  "HR",
+    "HR Mediathek": "HR",
     "SWR Mediathek": "SWR",
     "rbb Mediathek": "RBB",
-    "SR Mediathek":  "SR",
-    "ZDF Info":      "ZDFinfo",
-    "ZDF Neo":       "ZDFneo",
-    "KiKA":          "KiKA",
-    "Phoenix":       "PHOENIX",
-    "Radio Bremen":  "Radio Bremen TV",
-    "funk":          "Funk.net",
-    "ARD alpha":     "ARD-alpha",
-    "ONE":           "ONE",
-    "tagesschau24":  "tagesschau24",
-    "DW":            "DW",
+    "SR Mediathek": "SR",
+    "ZDF Info": "ZDFinfo",
+    "ZDF Neo": "ZDFneo",
+    "KiKA": "KiKA",
+    "Phoenix": "PHOENIX",
+    "Radio Bremen": "Radio Bremen TV",
+    "funk": "Funk.net",
+    "ARD alpha": "ARD-alpha",
+    "ONE": "ONE",
+    "tagesschau24": "tagesschau24",
+    "DW": "DW",
 }
 
-MODE_GROUPS   = 0
+MODE_GROUPS = 0
 MODE_EPISODES = 1
 
 # Sondereinträge am Anfang der Gruppenansicht
-_SV_ENTRY  = ">> Sendung verpasst?"
-_SN_ENTRY  = ">> Demnächst"
+_SV_ENTRY = ">> Sendung verpasst?"
+_SN_ENTRY = ">> Demnächst"
 
 
 def _episode_label(title_bytes):
@@ -202,8 +203,8 @@ def _episode_label(title_bytes):
     m = re.search(r'\(S(\d+)/E(\d+)\)', title)
     if m:
         season = int(m.group(1))
-        clean  = re.sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
-        label  = "S%d  %s" % (season, clean)
+        clean = re.sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
+        label = "S%d  %s" % (season, clean)
     else:
         label = title
     return _u(label)
@@ -237,7 +238,7 @@ def _relevance_sort(groups, search_term):
 
 
 def _build_groups(items, sort_mode="timestamp", flat=False):
-    groups_dict  = {}
+    groups_dict = {}
     groups_order = []
     for item in items:
         if flat:
@@ -261,23 +262,23 @@ def _build_groups(items, sort_mode="timestamp", flat=False):
 # Alpha-Picker – A-Z Buchstabenauswahl als Overlay (Card Layout)
 # ------------------------------------------------------------------
 _ALPHA_CHARS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + ["#"]
-_ALPHA_COLS  = 9
-_ALPHA_ROWS  = 3
+_ALPHA_COLS = 9
+_ALPHA_ROWS = 3
 _ALPHA_CW, _ALPHA_CH = (160, 110) if IS_FHD else (106, 73)
-_ALPHA_X0    = ((1920 - _ALPHA_COLS * _ALPHA_CW) // 2) if IS_FHD else ((1280 - _ALPHA_COLS * _ALPHA_CW) // 2)
-_ALPHA_Y0    = ((1080 - _ALPHA_ROWS * _ALPHA_CH) // 2 + 20) if IS_FHD else ((720 - _ALPHA_ROWS * _ALPHA_CH) // 2 + 13)
+_ALPHA_X0 = ((1920 - _ALPHA_COLS * _ALPHA_CW) // 2) if IS_FHD else ((1280 - _ALPHA_COLS * _ALPHA_CW) // 2)
+_ALPHA_Y0 = ((1080 - _ALPHA_ROWS * _ALPHA_CH) // 2 + 20) if IS_FHD else ((720 - _ALPHA_ROWS * _ALPHA_CH) // 2 + 13)
 
 
 class OeMediathekAlphaPickerScreen(Screen):
 
     def _make_skin(self):
         cells = ""
-        font_cell  = 40 if IS_FHD else 26
+        font_cell = 40 if IS_FHD else 26
         font_title = 34 if IS_FHD else 22
-        font_hint  = 32 if IS_FHD else 21
+        font_hint = 32 if IS_FHD else 21
         screen_w, screen_h = (1920, 1080) if IS_FHD else (1280, 720)
         title_h = 60 if IS_FHD else 40
-        hint_h  = 50 if IS_FHD else 33
+        hint_h = 50 if IS_FHD else 33
 
         for i, ch in enumerate(_ALPHA_CHARS):
             r = i // _ALPHA_COLS
@@ -328,8 +329,8 @@ class OeMediathekAlphaPickerScreen(Screen):
         self.selected = 0
 
         self["title_label"] = Label("Buchstabe wählen")
-        self["selector"]    = Label("")
-        self["hint_label"]  = Label("OK = Wählen   |   EXIT = Abbrechen")
+        self["selector"] = Label("")
+        self["hint_label"] = Label("OK = Wählen   |   EXIT = Abbrechen")
 
         for i, ch in enumerate(_ALPHA_CHARS):
             self["cell_%d" % i] = Label(ch)
@@ -337,12 +338,12 @@ class OeMediathekAlphaPickerScreen(Screen):
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"],
             {
-                "ok":     self.on_ok,
+                "ok": self.on_ok,
                 "cancel": self.on_cancel,
-                "up":     self.key_up,
-                "down":   self.key_down,
-                "left":   self.key_left,
-                "right":  self.key_right,
+                "up": self.key_up,
+                "down": self.key_down,
+                "left": self.key_left,
+                "right": self.key_right,
             },
             1,
         )
@@ -438,15 +439,15 @@ class OeMediathekInfoScreen(Screen):
     def __init__(self, session, title, description, duration):
         self.skin = self._make_skin()
         Screen.__init__(self, session)
-        
+
         self["title_label"] = Label(_b(title))
-        
+
         dur_str = _b("Laufzeit: ") + _b(duration)
         self["duration_label"] = Label(dur_str)
-        
+
         self["text_label"] = ScrollLabel(_b(description))
         self["hint_label"] = Label("Hoch/Runter = Scrollen   |   EXIT/INFO = Schließen")
-        
+
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions", "EPGSelectActions"],
             {
@@ -475,7 +476,6 @@ class OeMediathekInfoScreen(Screen):
             _log("doClose TypeError: " + str(e))
 
 
-
 # ------------------------------------------------------------------
 # Download-Queue
 # ------------------------------------------------------------------
@@ -484,7 +484,7 @@ def _queue_next():
     """Startet den nächsten Download aus der Queue, oder meldet alle fertig."""
     global _active_downloader, _download_queue, _bg_download_result
     if not _download_queue:
-        _active_downloader  = None
+        _active_downloader = None
         _bg_download_result = "ok"
         return
     item = _download_queue.pop(0)
@@ -505,7 +505,7 @@ def _queue_next():
 
 def _queue_error(msg):
     global _active_downloader, _bg_download_result
-    _active_downloader  = None
+    _active_downloader = None
     _bg_download_result = "err:" + str(msg)
     _queue_next()
 
@@ -518,38 +518,38 @@ class OeMediathekMainScreen(Screen):
     @staticmethod
     def _make_skin():
         tiles_bg = ""
-        logos    = ""
+        logos = ""
         for r in range(TILE_ROWS):
             for c in range(TILE_COLS):
-                i   = r * TILE_COLS + c
-                tx  = _TX[c]
-                ty  = _TY[r]
+                i = r * TILE_COLS + c
+                tx = _TX[c]
+                ty = _TY[r]
                 # Logo vertikal zentriert in der Kachel (xpicons 220x132 / HD: 146x88)
                 lw, lh = (220, 132) if IS_FHD else (146, 88)
-                lx  = tx + (TILE_W - lw) // 2
-                ly  = ty + (TILE_H - lh) // 2
+                lx = tx + (TILE_W - lw) // 2
+                ly = ty + (TILE_H - lh) // 2
                 tiles_bg += '<eLabel position="%d,%d" size="%d,%d" backgroundColor="#1A000000" zPosition="-4" />\n' \
                             % (tx, ty, TILE_W, TILE_H)
-                logos    += '<widget name="logo_%d" position="%d,%d" size="%d,%d" alphatest="blend" scale="1" transparent="1" zPosition="1" />\n' \
+                logos += '<widget name="logo_%d" position="%d,%d" size="%d,%d" alphatest="blend" scale="1" transparent="1" zPosition="1" />\n' \
                             % (i, lx, ly, lw, lh)
 
         if IS_FHD:
-            sw, sh    = 1920, 1080
+            sw, sh = 1920, 1080
             hdr_y, hdr_h = 30, 80
-            font_title   = 44
+            font_title = 44
             bar_y, bar_h = 960, 100
-            font_hint    = 32
-            font_page    = 36
-            hint_w       = 1560
+            font_hint = 32
+            font_page = 36
+            hint_w = 1560
             page_x, page_w = 1620, 240
         else:
-            sw, sh    = 1280, 720
+            sw, sh = 1280, 720
             hdr_y, hdr_h = 20, 53
-            font_title   = 29
+            font_title = 29
             bar_y, bar_h = 640, 66
-            font_hint    = 21
-            font_page    = 24
-            hint_w       = 1040
+            font_hint = 21
+            font_page = 24
+            hint_w = 1040
             page_x, page_w = 1080, 160
 
         margin = 30 if IS_FHD else 20
@@ -613,22 +613,22 @@ class OeMediathekMainScreen(Screen):
         self.skin = self._make_skin()
         _log("MainScreen init")
         Screen.__init__(self, session)
-        self.session       = session
-        self.selected      = 0
-        self.main_page     = 0
-        self._sort_mode    = False   # Sortiermodus aktiv?
+        self.session = session
+        self.selected = 0
+        self.main_page = 0
+        self._sort_mode = False   # Sortiermodus aktiv?
         self._sort_grabbed = None    # Index der angefassten Kachel (None = noch nichts gegriffen)
         self._sort_order_backup = None  # Backup der Reihenfolge fuer Reset
 
-        self["title_label"]  = Label(_b("\xc3\x96R Mediathek"))
-        self["selector"]     = Label("")
-        self["hint_red"]     = Label(_b("Sortieren"))
-        self["hint_green"]   = Label(_b("Einstellungen"))
-        self["hint_ok"]      = Label(_b("OK = \xc3\x96ffnen"))
-        self["hint_ch"]      = Label(_b("CH+/- = Seite bl\xc3\xa4ttern"))
-        self["hint_nav"]     = Label(_b("EXIT = Beenden"))
-        self["hint_yellow"]  = Label(_b(""))
-        self["page_label"]   = Label("")
+        self["title_label"] = Label(_b("\xc3\x96R Mediathek"))
+        self["selector"] = Label("")
+        self["hint_red"] = Label(_b("Sortieren"))
+        self["hint_green"] = Label(_b("Einstellungen"))
+        self["hint_ok"] = Label(_b("OK = \xc3\x96ffnen"))
+        self["hint_ch"] = Label(_b("CH+/- = Seite bl\xc3\xa4ttern"))
+        self["hint_nav"] = Label(_b("EXIT = Beenden"))
+        self["hint_yellow"] = Label(_b(""))
+        self["page_label"] = Label("")
 
         for i in range(TILES_PER_PAGE):
             try:
@@ -640,17 +640,17 @@ class OeMediathekMainScreen(Screen):
             ["OkCancelActions", "DirectionActions", "WizardActions",
              "ChannelSelectBaseActions", "ColorActions"],
             {
-                "ok":           self.on_ok,
-                "cancel":       self.close,
-                "up":           self.key_up,
-                "down":         self.key_down,
-                "left":         self.key_left,
-                "right":        self.key_right,
-                "nextBouquet":  self.page_next,
-                "prevBouquet":  self.page_prev,
-                "red":          self.key_red,
-                "green":        self.key_green,
-                "yellow":       self.open_download_manager,
+                "ok": self.on_ok,
+                "cancel": self.close,
+                "up": self.key_up,
+                "down": self.key_down,
+                "left": self.key_left,
+                "right": self.key_right,
+                "nextBouquet": self.page_next,
+                "prevBouquet": self.page_prev,
+                "red": self.key_red,
+                "green": self.key_green,
+                "yellow": self.open_download_manager,
             },
             -1,
         )
@@ -1029,62 +1029,62 @@ class OeMediathekScreen(Screen):
         self.skin = self._make_skin()
         _log("ContentScreen init: " + source_name)
         Screen.__init__(self, session)
-        self.session       = session
-        self.source_name   = source_name
-        self.loader        = loader
+        self.session = session
+        self.source_name = source_name
+        self.loader = loader
 
-        self.page            = 0
-        self.mode            = MODE_GROUPS
-        self._has_more       = True
-        self.all_items       = []
-        self.groups          = []
+        self.page = 0
+        self.mode = MODE_GROUPS
+        self._has_more = True
+        self.all_items = []
+        self.groups = []
         self.groups_filtered = []
-        self.cur_episodes    = []
-        self.cur_group_name  = ""
+        self.cur_episodes = []
+        self.cur_group_name = ""
 
-        self.current_search  = None
-        self.min_duration    = 0
-        self.sort_mode       = "timestamp"
-        self._sv_mode        = False   # True = Sendung-verpasst?-Filter aktiv
-        self._sn_mode        = False   # True = Demnächst-Filter aktiv
+        self.current_search = None
+        self.min_duration = 0
+        self.sort_mode = "timestamp"
+        self._sv_mode = False   # True = Sendung-verpasst?-Filter aktiv
+        self._sn_mode = False   # True = Demnächst-Filter aktiv
 
-        self._fetching      = False
-        self._fetch_target  = "groups"
-        self._fetch_result  = []
+        self._fetching = False
+        self._fetch_target = "groups"
+        self._fetch_result = []
         self._fetch_episodes_result = []
         self._fetch_alpha_result = []
-        self._fetch_total   = 0
-        self._fetch_error   = None
+        self._fetch_total = 0
+        self._fetch_error = None
 
         self.last_index = -1
         self.cur_group_idx = -1
-        self.alpha_letter  = None
+        self.alpha_letter = None
 
-        self["title_label"]  = Label(source_name)
+        self["title_label"] = Label(source_name)
         self["status_label"] = Label("Lade Inhalte ...")
-        self["menu_list"]    = MenuList([])
+        self["menu_list"] = MenuList([])
         self["description_text"] = ScrollLabel(_b(""))
-        
-        self["hint_red"]     = Label("")
-        self["hint_green"]   = Label("")
-        self["hint_yellow"]  = Label("")
-        self["hint_blue"]    = Label("")
-        self["hint_page"]    = Label("")
+
+        self["hint_red"] = Label("")
+        self["hint_green"] = Label("")
+        self["hint_yellow"] = Label("")
+        self["hint_blue"] = Label("")
+        self["hint_page"] = Label("")
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions", "DirectionActions",
              "ChannelSelectBaseActions", "EPGSelectActions"],
             {
-                "ok":           self.on_ok,
-                "cancel":       self.on_cancel,
-                "red":          self.on_red,
-                "green":        self.cycle_sort,
-                "yellow":       self.open_search,
-                "blue":         self.on_blue,
-                "info":         self.on_download,
-                "epg":          self.on_download,
-                "nextBouquet":  self.next_page,
-                "prevBouquet":  self.prev_page,
+                "ok": self.on_ok,
+                "cancel": self.on_cancel,
+                "red": self.on_red,
+                "green": self.cycle_sort,
+                "yellow": self.open_search,
+                "blue": self.on_blue,
+                "info": self.on_download,
+                "epg": self.on_download,
+                "nextBouquet": self.next_page,
+                "prevBouquet": self.prev_page,
             },
             -1,
         )
@@ -1096,12 +1096,12 @@ class OeMediathekScreen(Screen):
 
         self._poll_timer = eTimer()
         self._poll_timer.callback.append(self._poll_fetch)
-        
+
         self._desc_timer = eTimer()
         self._desc_timer.callback.append(self._update_desc)
         self._desc_timer.start(250, False)
 
-        self._toast_timer  = eTimer()
+        self._toast_timer = eTimer()
         self._toast_timer.callback.append(self._clear_toast)
         self._saved_status = None
 
@@ -1117,8 +1117,8 @@ class OeMediathekScreen(Screen):
 
     def __stop_timers(self):
         for timer, cb in ((self._start_timer, self._start_fetch),
-                          (self._poll_timer,  self._poll_fetch),
-                          (self._desc_timer,  self._update_desc),
+                          (self._poll_timer, self._poll_fetch),
+                          (self._desc_timer, self._update_desc),
                           (self._toast_timer, self._clear_toast)):
             try:
                 if timer:
@@ -1127,8 +1127,8 @@ class OeMediathekScreen(Screen):
             except Exception:
                 pass
         self._start_timer = None
-        self._poll_timer  = None
-        self._desc_timer  = None
+        self._poll_timer = None
+        self._desc_timer = None
         self._toast_timer = None
 
     def doClose(self):
@@ -1143,10 +1143,10 @@ class OeMediathekScreen(Screen):
         if self._fetching:
             return
         _log("Fetch Seite %d" % self.page)
-        self._fetching     = True
+        self._fetching = True
         self._fetch_target = "groups"
         self._fetch_result = []
-        self._fetch_error  = None
+        self._fetch_error = None
         self["status_label"].setText("Verbinde ...")
         t = threading.Thread(target=self._fetch_thread)
         t.daemon = True
@@ -1186,21 +1186,21 @@ class OeMediathekScreen(Screen):
             _log("Fehler: " + self._fetch_error)
             self["status_label"].setText("Fehler beim Laden!")
             return
-        
+
         raw = self._fetch_result
         _log("Fetch ok: %d Eintraege Seite %d" % (len(raw), self.page))
-        
+
         if not raw and self.page == 0:
             self["status_label"].setText("Keine Inhalte gefunden.")
             self["menu_list"].setList([])
             return
-            
+
         loaded_so_far = (self.page + 1) * PAGE_SIZE
         self._has_more = (self._fetch_total > loaded_so_far) or (len(raw) >= PAGE_SIZE)
 
         self.all_items = raw
-            
-        self.groups          = _build_groups(self.all_items, self.sort_mode)
+
+        self.groups = _build_groups(self.all_items, self.sort_mode)
         self.groups_filtered = _relevance_sort(self.groups, self.current_search)
         self._show_groups()
 
@@ -1218,7 +1218,7 @@ class OeMediathekScreen(Screen):
             if idx == self.last_index:
                 return
             self.last_index = idx
-            
+
             if self.mode == MODE_GROUPS:
                 self["description_text"].setText(_b(""))
                 self._update_red_hint()
@@ -1227,7 +1227,7 @@ class OeMediathekScreen(Screen):
                 if idx is not None and idx < len(self.cur_episodes):
                     item = self.cur_episodes[idx]
                     desc = item.get("description", _b("Keine Beschreibung verfügbar."))
-                    dur  = item.get("duration", "Unbekannt")
+                    dur = item.get("duration", "Unbekannt")
                     full_text = _b("[") + _b(dur) + _b("]\n\n") + _b(desc)
                     self["description_text"].setText(full_text)
         except Exception:
@@ -1276,15 +1276,15 @@ class OeMediathekScreen(Screen):
         choices = []
         now_ts = _time.time()
         for i in range(8):
-            t   = _time.localtime(now_ts - i * 86400)
-            ds  = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
+            t = _time.localtime(now_ts - i * 86400)
+            ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
             dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
             if i == 0:
                 label = _b("Heute (%s)" % dsp)
             elif i == 1:
                 label = _b("Gestern (%s)" % dsp)
             else:
-                wd    = _WEEKDAYS[t.tm_wday]
+                wd = _WEEKDAYS[t.tm_wday]
                 label = wd + _b(" (%s)" % dsp)
             choices.append((label, ds))
         self.session.openWithCallback(
@@ -1304,7 +1304,7 @@ class OeMediathekScreen(Screen):
             y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
             # Mitternacht bis 23:59:59 in der Lokalzeit der Box
             start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
-            end_ts   = start_ts + 86399
+            end_ts = start_ts + 86399
         except Exception:
             self["status_label"].setText(_b("Datum ungueltig!"))
             return
@@ -1330,13 +1330,13 @@ class OeMediathekScreen(Screen):
         choices = []
         now_ts = _time.time()
         for i in range(1, 8):
-            t   = _time.localtime(now_ts + i * 86400)
-            ds  = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
+            t = _time.localtime(now_ts + i * 86400)
+            ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
             dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
             if i == 1:
                 label = _b("Morgen (%s)" % dsp)
             else:
-                wd    = _WEEKDAYS[t.tm_wday]
+                wd = _WEEKDAYS[t.tm_wday]
                 label = wd + _b(" (%s)" % dsp)
             choices.append((label, ds))
         self.session.openWithCallback(
@@ -1356,7 +1356,7 @@ class OeMediathekScreen(Screen):
             y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
             # Mitternacht bis 23:59:59 in der Lokalzeit der Box
             start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
-            end_ts   = start_ts + 86399
+            end_ts = start_ts + 86399
         except Exception:
             self["status_label"].setText(_b("Datum ungueltig!"))
             return
@@ -1384,7 +1384,7 @@ class OeMediathekScreen(Screen):
         if self.mode == MODE_EPISODES:
             self["hint_page"].setText("EXIT = Zurück")
             return
-        page_num    = self.page + 1
+        page_num = self.page + 1
         total_pages = (self._fetch_total + PAGE_SIZE - 1) // PAGE_SIZE if self._fetch_total > 0 else None
         if total_pages:
             page_info = "CH+/- Seite %d von %d" % (page_num, total_pages)
@@ -1397,32 +1397,32 @@ class OeMediathekScreen(Screen):
     def _start_episode_fetch(self, group_idx):
         if self._fetching:
             return
-            
+
         self.mode = MODE_EPISODES
         self.last_index = -1
         self.cur_group_idx = group_idx + self._sv_sn_offset()
         self._fetching = True
         self._fetch_target = "episodes"
         self._fetch_episodes_result = []
-        
+
         gname, gitems = self.groups_filtered[group_idx]
         self.cur_group_name = gname
-        
+
         group_str = _u(gname)
-            
+
         title_text = _u(self.source_name) + " | " + _u(group_str)
         self["title_label"].setText(title_text)
-        
+
         # Favoriten haben ohnehin schon alle lokalen Folgen geladen (bis zu 500)
         if self.source_name != "Meine Favoriten":
             self["status_label"].setText("Lade alle Folgen ...")
-            
+
         self["menu_list"].setList([])
         self["description_text"].setText(_b(""))
-        
+
         self._update_red_hint()
         self._update_page_hint()
-        
+
         t = threading.Thread(target=self._fetch_episodes_thread, args=(gname, gitems))
         t.daemon = True
         t.start()
@@ -1439,7 +1439,7 @@ class OeMediathekScreen(Screen):
                 return
 
             raw_str = _u(gname)
-            
+
             # Trennt Sender-Praefixe wie "NDR: " vom eigentlichen Sendungsnamen
             if ": " in raw_str:
                 pure_topic = raw_str.split(": ", 1)[1]
@@ -1464,7 +1464,7 @@ class OeMediathekScreen(Screen):
                 sort_by=api_sort,
                 search_fields=["topic"],
             )
-            
+
             exact_items = []
             gname_str = raw_str
             # Unscharfe Treffer serverseitig aussortieren (Filterung exakt auf den Ursprungsnamen)
@@ -1473,33 +1473,33 @@ class OeMediathekScreen(Screen):
                 ig_str = _u(ig)
                 if ig_str == gname_str:
                     exact_items.append(item)
-                    
+
             if not exact_items:
                 exact_items = list(local_items)
-                
+
             self._fetch_episodes_result = exact_items
             self._fetch_error = None
         except Exception:
             self._fetch_error = _fmt_exc()
             self._fetch_episodes_result = list(local_items)
-            
+
         self._fetching = False
 
     def _on_episodes_fetch_done(self):
         if self._fetch_error:
             _log("Episoden Fetch Fehler: " + str(self._fetch_error))
-            
+
         self.cur_episodes = self._fetch_episodes_result
-        
+
         if self.sort_mode == "az":
             self.cur_episodes = sorted(
                 self.cur_episodes,
                 key=lambda i: _u(i["title"]).lower()
             )
-            
+
         self["menu_list"].setList([_episode_label(i["title"]) for i in self.cur_episodes])
         self["status_label"].setText("%d Folgen" % len(self.cur_episodes))
-        
+
         self["hint_red"].setText("")
         self["hint_green"].setText(self._next_sort_hint())
         self["hint_yellow"].setText("Suche (Server)")
@@ -1514,7 +1514,7 @@ class OeMediathekScreen(Screen):
         if self.cur_episodes:
             item = self.cur_episodes[0]
             desc = item.get("description", _b("Keine Beschreibung verfügbar."))
-            dur  = item.get("duration", "Unbekannt")
+            dur = item.get("duration", "Unbekannt")
             self["description_text"].setText(_b("[") + _b(dur) + _b("]\n\n") + _b(desc))
             self.last_index = 0
 
@@ -1550,7 +1550,7 @@ class OeMediathekScreen(Screen):
                 if t is not None and t.is_alive():
                     _download_queue.append({
                         "title": item["title"],
-                        "url":   url,
+                        "url": url,
                         "topic": self.cur_group_name,
                     })
                     self._show_toast("Zur Warteschlange hinzugefügt", added=True)
@@ -1561,7 +1561,7 @@ class OeMediathekScreen(Screen):
                 if _download_queue:
                     _download_queue.append({
                         "title": item["title"],
-                        "url":   url,
+                        "url": url,
                         "topic": self.cur_group_name,
                     })
                     self._show_toast("Zur Warteschlange hinzugefügt", added=True)
@@ -1572,7 +1572,6 @@ class OeMediathekScreen(Screen):
             self.session.open(OeMediathekDownloadScreen, item["title"], url, topic=self.cur_group_name)
         except Exception:
             _log("on_download Fehler: " + _fmt_exc())
-
 
     def on_ok(self):
         try:
@@ -1591,16 +1590,16 @@ class OeMediathekScreen(Screen):
             else:
                 if idx < len(self.cur_episodes):
                     item = self.cur_episodes[idx]
-                    
+
                     url_hd = item.get("stream_url_hd", "")
                     url_sd = item.get("stream_url_sd", "")
-                    
+
                     options = []
                     if url_hd:
                         options.append(("Hohe Qualitaet (HD)", url_hd))
                     if url_sd and url_sd != url_hd:
                         options.append(("Normale Qualitaet (SD - datensparend)", url_sd))
-                        
+
                     if len(options) > 1:
                         self.session.openWithCallback(
                             lambda ret: self.play_selected_quality(ret, item["title"]),
@@ -1838,8 +1837,8 @@ class OeMediathekScreen(Screen):
     _SORT_CYCLE = ["timestamp", "az", "duration"]
     _SORT_LABELS = {
         "timestamp": "Neueste zuerst",
-        "az":        "A-Z",
-        "duration":  "Nach Laenge",
+        "az": "A-Z",
+        "duration": "Nach Laenge",
     }
 
     def _next_sort_hint(self):
@@ -1906,7 +1905,7 @@ class OeMediathekScreen(Screen):
                     self.current_search = None
                 else:
                     self.current_search = term
-                
+
                 self.page = 0
                 self.all_items = []
                 self.groups = []
@@ -1947,14 +1946,14 @@ class OeMediathekDirBrowser(Screen):
         self._cur = start_dir or "/"
 
         self["title_label"] = Label(_b("Ordner auswählen"))
-        self["path_label"]  = Label(_b(self._cur))
-        self["menu_list"]   = MenuList([])
-        self["hint_label"]  = Label(_b("OK = Öffnen/Wählen   |   Gelb = Neuer Ordner   |   EXIT = Abbrechen"))
+        self["path_label"] = Label(_b(self._cur))
+        self["menu_list"] = MenuList([])
+        self["hint_label"] = Label(_b("OK = Öffnen/Wählen   |   Gelb = Neuer Ordner   |   EXIT = Abbrechen"))
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions", "ColorActions"],
             {
-                "ok":     self._on_ok,
+                "ok": self._on_ok,
                 "cancel": self._on_cancel,
                 "yellow": self._new_folder,
             },
@@ -2075,23 +2074,23 @@ class OeMediathekSettingsScreen(Screen):
 
     # Menüeinträge: (Anzeigetext, Beschreibung)
     _MENU = [
-        ("Download-Ordner",         "Speicherort f\xc3\xbcr Downloads w\xc3\xa4hlen"),
+        ("Download-Ordner", "Speicherort f\xc3\xbcr Downloads w\xc3\xa4hlen"),
         ("Reihenfolge zur\xc3\xbccksetzen", "Kachel-Reihenfolge auf Standard zur\xc3\xbccksetzen"),
     ]
 
     def __init__(self, session):
         Screen.__init__(self, session)
         self["title_label"] = Label(_b("Einstellungen"))
-        self["menu_list"]   = MenuList([_u(e[0]) for e in self._MENU])
-        self["hint_label"]  = Label(_b("OK = Ausw\xc3\xa4hlen   |   EXIT = Schlie\xc3\x9fen"))
+        self["menu_list"] = MenuList([_u(e[0]) for e in self._MENU])
+        self["hint_label"] = Label(_b("OK = Ausw\xc3\xa4hlen   |   EXIT = Schlie\xc3\x9fen"))
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"],
             {
-                "ok":     self._on_ok,
+                "ok": self._on_ok,
                 "cancel": self.close,
-                "up":     self["menu_list"].pageUp,
-                "down":   self["menu_list"].pageDown,
+                "up": self["menu_list"].pageUp,
+                "down": self["menu_list"].pageDown,
             },
             -1,
         )
@@ -2135,7 +2134,6 @@ class OeMediathekSettingsScreen(Screen):
             _log("Settings reset_order: " + str(e))
         self.close()
 
-
     def doClose(self):
         try:
             Screen.doClose(self)
@@ -2171,17 +2169,17 @@ class OeMediathekDownloadScreen(Screen):
 
     def __init__(self, session, title, url, topic=None):
         Screen.__init__(self, session)
-        self._url   = url
+        self._url = url
         self._topic = topic
-        self._done  = False
-        self._err   = None
+        self._done = False
+        self._err = None
 
         # Shared state zwischen Thread und Hauptthread (nur schreiben im Thread, lesen im Timer)
         self._dl_downloaded = 0
-        self._dl_total      = 0
-        self._dl_done       = False
-        self._dl_err        = None
-        self._dl_filepath   = None
+        self._dl_total = 0
+        self._dl_done = False
+        self._dl_err = None
+        self._dl_filepath = None
 
         if isinstance(title, bytes):
             title_str = title.decode("utf-8", "replace")
@@ -2189,16 +2187,16 @@ class OeMediathekDownloadScreen(Screen):
             title_str = title
         self._title_str = title_str
 
-        self["title_label"]  = Label(_b(title_str))
+        self["title_label"] = Label(_b(title_str))
         self["status_label"] = Label(_b("Starte Download ..."))
-        self["hint_yellow"]  = Label(_b("Im Hintergrund"))
-        self["hint_label"]   = Label(_b("EXIT = Abbrechen"))
+        self["hint_yellow"] = Label(_b("Im Hintergrund"))
+        self["hint_label"] = Label(_b("EXIT = Abbrechen"))
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions"],
             {
                 "cancel": self._on_cancel,
-                "ok":     self._on_cancel,
+                "ok": self._on_cancel,
                 "yellow": self._to_background,
             },
             -1,
@@ -2247,11 +2245,11 @@ class OeMediathekDownloadScreen(Screen):
     # Callbacks aus dem Background-Thread — NUR einfache Wertzuweisungen, kein UI!
     def _cb_progress(self, downloaded, total):
         self._dl_downloaded = downloaded
-        self._dl_total      = total
+        self._dl_total = total
 
     def _cb_done(self, filepath):
         self._dl_filepath = filepath
-        self._dl_done     = True
+        self._dl_done = True
 
     def _cb_error(self, msg):
         self._dl_err = msg
@@ -2272,7 +2270,7 @@ class OeMediathekDownloadScreen(Screen):
             return
 
         downloaded = self._dl_downloaded
-        total      = self._dl_total
+        total = self._dl_total
         if total > 0:
             pct = int(downloaded * 100 / total)
             self["status_label"].setText(_b("%d%% von %s" % (pct, format_size(total))))
@@ -2284,12 +2282,12 @@ class OeMediathekDownloadScreen(Screen):
         if not self._downloader or self._dl_done or self._dl_err is not None:
             return
 
-        self._downloader.on_done     = lambda fp: _queue_next()
-        self._downloader.on_error    = lambda msg: _queue_error(msg)
+        self._downloader.on_done = lambda fp: _queue_next()
+        self._downloader.on_error = lambda msg: _queue_error(msg)
         self._downloader.on_progress = lambda *a: None
 
         _active_downloader = self._downloader
-        self._downloader   = None  # verhindert cancel() in doClose
+        self._downloader = None  # verhindert cancel() in doClose
         self.close()
 
     def _on_cancel(self):

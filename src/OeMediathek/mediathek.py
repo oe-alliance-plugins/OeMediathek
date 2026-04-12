@@ -5,9 +5,9 @@
 import json
 import os
 
-LOG_FILE       = "/tmp/oemediathek.log"
+LOG_FILE = "/tmp/oemediathek.log"
 FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
-DEBUG          = False
+DEBUG = False
 
 # Bekannte Sendernamen fuer die Favoriten-Bereinigung (Duplikat zu CHANNEL_MAP in plugin.py,
 # aber mediathek.py soll ohne plugin.py lauffaehig bleiben).
@@ -28,6 +28,7 @@ _FILM_TOPICS = {
     "reportage", "reportagen", "feature",
 }
 
+
 def _s(val):
     """Gibt val als nativen Text-String zurück (Python 3 / Enigma2)."""
     if val is None:
@@ -39,6 +40,7 @@ def _s(val):
             return val.decode('latin-1', 'replace')
     return str(val)
 
+
 def _log(msg):
     if not DEBUG:
         return
@@ -49,6 +51,7 @@ def _log(msg):
             f.write(line + "\n")
     except Exception:
         pass
+
 
 from urllib.request import urlopen, Request
 
@@ -82,12 +85,12 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
     api_sort = sort_by if sort_by in ("timestamp", "duration") else "timestamp"
 
     body_dict = {
-        "queries":   queries,
-        "sortBy":    api_sort,
+        "queries": queries,
+        "sortBy": api_sort,
         "sortOrder": "desc",
-        "future":    True,
-        "offset":    offset,
-        "size":      size,
+        "future": True,
+        "offset": offset,
+        "size": size,
     }
     if min_duration > 0:
         body_dict["duration_min"] = min_duration
@@ -107,9 +110,9 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
         data = json.loads(resp.read())
     except Exception as e:
         _log("MVW Fehler: " + str(e))
-        raise 
+        raise
 
-    results_raw  = data.get("result", {}).get("results", [])
+    results_raw = data.get("result", {}).get("results", [])
     total_results = data.get("result", {}).get("queryInfo", {}).get("totalResults", 0)
     try:
         total_results = int(total_results)
@@ -125,10 +128,10 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
 
     items = []
     for entry in results_raw:
-        ch         = entry.get("channel", "")
-        topic      = entry.get("topic", "")
-        title      = entry.get("title", "")
-        timestamp  = entry.get("timestamp", 0)
+        ch = entry.get("channel", "")
+        topic = entry.get("topic", "")
+        title = entry.get("title", "")
+        timestamp = entry.get("timestamp", 0)
 
         if ch in blocked:
             continue
@@ -137,13 +140,13 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
         # Die API liefert auch ARTE.FR, ARTE.IT etc. bei channel="ARTE"-Abfragen.
         if ch.upper().startswith("ARTE") and ch.upper() != "ARTE.DE":
             continue
-        
+
         # HD und SD getrennt auslesen
-        url_hd     = entry.get("url_video_hd") or ""
-        url_sd     = entry.get("url_video") or ""
-        
-        desc       = entry.get("description", "")
-        duration   = entry.get("duration", 0)
+        url_hd = entry.get("url_video_hd") or ""
+        url_sd = entry.get("url_video") or ""
+
+        desc = entry.get("description", "")
+        duration = entry.get("duration", 0)
 
         # API kuerzt Beschreibungen mit "\n....." — nur das API-Artefakt entfernen,
         # echte Satzpunkte aber in Ruhe lassen.
@@ -201,14 +204,14 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
             ts = 0
 
         items.append({
-            "title":         _s(title),
-            "group":         _s(group_key),
-            "channel":       _s(ch),
+            "title": _s(title),
+            "group": _s(group_key),
+            "channel": _s(ch),
             "stream_url_hd": _s(url_hd),
             "stream_url_sd": _s(url_sd),
-            "description":   _s(desc),
-            "duration":      _s(duration_str),
-            "timestamp":     ts,
+            "description": _s(desc),
+            "duration": _s(duration_str),
+            "timestamp": ts,
         })
 
     _log("MVW %d Sendungen verarbeitet" % len(items))
@@ -221,68 +224,90 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
 def get_ard_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ARD", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_zdf_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ZDF", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_arte_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ARTE", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_3sat_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("3Sat", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_ndr_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("NDR", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_wdr_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("WDR", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_br_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("BR", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_mdr_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("MDR", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_hr_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("HR", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_swr_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("SWR", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_rbb_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("RBB", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_sr_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("SR", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_zdfinfo_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ZDFinfo", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_zdfneo_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ZDFneo", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_kika_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("KiKA", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_phoenix_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("PHOENIX", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_radio_bremen_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("Radio Bremen TV", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_funk_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("Funk.net", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_ard_alpha_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ARD-alpha", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_one_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ONE", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_tagesschau24_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("tagesschau24", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_dw_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("DW", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_all_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query(channel=None, size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
@@ -293,6 +318,7 @@ def get_all_highlights(offset=0, size=100, search_term=None, min_duration=0, sor
 # Gespeichert als JSON: Liste von {"group": "...", "channel": "..."}
 # ------------------------------------------------------------------
 _SV_SN_NAMES = {">> Sendung verpasst?", ">> Demn\u00e4chst"}
+
 
 def _load_favorites_raw():
     try:
@@ -322,10 +348,10 @@ def save_favorites(favorites_raw):
 def add_favorite(group_bytes, channel_bytes):
     """Fuegt eine Gruppe zu den Favoriten hinzu (Duplikate werden ignoriert)."""
     try:
-        group   = group_bytes.decode("utf-8", "replace") if isinstance(group_bytes, bytes) else group_bytes
+        group = group_bytes.decode("utf-8", "replace") if isinstance(group_bytes, bytes) else group_bytes
         channel = channel_bytes.decode("utf-8", "replace") if isinstance(channel_bytes, bytes) else channel_bytes
     except Exception:
-        group   = str(group_bytes)
+        group = str(group_bytes)
         channel = str(channel_bytes)
 
     favs = _load_favorites_raw()
@@ -370,14 +396,14 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
     all_items = []
     for fav in favs:
         channel = fav.get("channel") or None
-        group   = fav.get("group", "")
+        group = fav.get("group", "")
 
         # Den reinen Sendungsnamen extrahieren fuer die API Suche.
         # Nur entfernen wenn der Teil vor ": " wirklich ein bekannter Sendername ist —
         # sonst wuerde z.B. "Tatort: Borowski..." faelschlich zu "Borowski..." gekuerzt.
         pure_topic = group
         if channel and group.startswith(channel + ": "):
-            pure_topic = group[len(channel)+2:]
+            pure_topic = group[len(channel) + 2:]
         elif ": " in group:
             prefix = group.split(": ", 1)[0]
             if prefix in _KNOWN_CHANNELS:
