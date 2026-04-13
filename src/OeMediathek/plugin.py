@@ -205,7 +205,7 @@ def _episode_label(title_bytes):
         season = int(m.group(1))
         episode = int(m.group(2))
         clean = re.sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
-        label   = "S%02dE%02d  %s" % (season, episode, clean)
+        label = "S%02dE%02d  %s" % (season, episode, clean)
     else:
         label = title
     return _u(label)
