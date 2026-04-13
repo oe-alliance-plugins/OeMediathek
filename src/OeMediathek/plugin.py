@@ -196,15 +196,16 @@ _SN_ENTRY = ">> Demnächst"
 def _episode_label(title_bytes):
     """
     Gibt einen Listeneintrag zurueck. Falls der Titel (SXX/EYY) enthaelt,
-    wird 'S34 · <Titel ohne Tag>' vorangestellt, sonst unveraendert.
+    wird 'S12E08  <Titel ohne Tag>' vorangestellt, sonst unveraendert.
     """
     import re
     title = _u(title_bytes)
     m = re.search(r'\(S(\d+)/E(\d+)\)', title)
     if m:
         season = int(m.group(1))
+        episode = int(m.group(2))
         clean = re.sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
-        label = "S%d  %s" % (season, clean)
+        label   = "S%02dE%02d  %s" % (season, episode, clean)
     else:
         label = title
     return _u(label)
@@ -1752,6 +1753,16 @@ class OeMediathekScreen(Screen):
             if is_favorite(gname):
                 remove_favorite(gname)
                 self._show_toast("Favorit entfernt", added=False)
+                # In der Favoriten-Ansicht den Eintrag sofort aus der Liste entfernen
+                if self.source_name == "Meine Favoriten":
+                    self.groups = [(n, i) for n, i in self.groups if n != gname]
+                    self.groups_filtered = [(n, i) for n, i in self.groups_filtered if n != gname]
+                    self._show_groups()
+                    # Cursor auf sinnvolle Position setzen (bleibt beim gleichen Index, clamped)
+                    new_len = len(self.groups_filtered)
+                    if new_len > 0:
+                        new_pos = min(real_idx, new_len - 1)
+                        self["menu_list"].instance.moveSelectionTo(new_pos)
             else:
                 add_favorite(gname, channel)
                 self._show_toast("Favorit hinzugefügt!", added=True)
