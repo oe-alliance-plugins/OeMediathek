@@ -2,6 +2,7 @@
 # player.py
 # Startet einen Stream im angepassten Enigma2-Mediaplayer
 
+import os
 from enigma import eServiceReference
 
 try:
@@ -29,23 +30,36 @@ class OeStreamPlayer(MoviePlayer):
         pass
 
 
+_ORF_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+
+def _has_serviceapp():
+    return os.path.exists("/usr/lib/enigma2/python/Plugins/SystemPlugins/ServiceApp")
+
+
 def play_stream(session, stream_url, title="ÖR Mediathek"):
     """
-    Spielt eine m3u8-URL im eigenen, angepassten Enigma2-Player ab.
+    Spielt eine URL im eigenen, angepassten Enigma2-Player ab.
+    Nutzt standardmaessig 4097 (GStreamer). Nur bei ORF-Streams wird,
+    falls verfuegbar, auf 5002 (exteplayer3) gewechselt.
     """
 
     if isinstance(stream_url, bytes):
-        stream_url_str = stream_url.decode('utf-8', 'replace')
+        stream_url_str = stream_url.decode("utf-8", "replace")
     else:
-        stream_url_str = stream_url
+        stream_url_str = str(stream_url)
+
+    is_orf = "apasfiis.sf.apa.at" in stream_url_str
+    if is_orf and "#" not in stream_url_str:
+        stream_url_str = stream_url_str + "#User-Agent=" + _ORF_USER_AGENT
 
     stream_url_bytes = stream_url_str
-    title_bytes = title.decode('utf-8', 'replace') if isinstance(title, bytes) else str(title)
+    title_bytes = title.decode("utf-8", "replace") if isinstance(title, bytes) else str(title)
 
-    # Enigma2 Service-Referenz für HLS/m3u8
-    # Typ 4097 = gstreamer / externer Player
-    ref = eServiceReference(4097, 0, stream_url_bytes)
+    player_id = 4097
+    if is_orf and _has_serviceapp():
+        player_id = 5002
+
+    ref = eServiceReference(player_id, 0, stream_url_bytes)
     ref.setName(title_bytes)
-
-    # Hier wird der erstellte Player aufgerufen
     session.open(OeStreamPlayer, ref)

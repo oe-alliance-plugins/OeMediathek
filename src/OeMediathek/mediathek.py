@@ -16,6 +16,8 @@ except Exception:
 
 LOG_FILE = "/tmp/oemediathek.log"
 FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
+SEARCH_HISTORY_FILE = "/etc/enigma2/oemediathek_search_history.json"
+SEARCH_HISTORY_MAX = 10
 DEBUG = False
 
 # Bekannte Sendernamen fuer die Favoriten-Bereinigung (Duplikat zu CHANNEL_MAP in plugin.py,
@@ -163,8 +165,8 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
         if not title or (not url_hd and not url_sd):
             continue
 
-        # Audiodeskriptions-Fassungen ausblenden
-        if title.endswith("(Audiodeskription)"):
+        # Audiodeskriptions- und Gebaerdensprach-Fassungen ausblenden
+        if title.endswith("(Audiodeskription)") or title.endswith("(Gebärdensprache)"):
             continue
 
         try:
@@ -309,6 +311,12 @@ def get_dw_highlights(offset=0, size=100, search_term=None, min_duration=0, sort
     return _mvw_query("DW", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
 
+def get_orf_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
+    return _mvw_query("ORF", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
+def get_srf_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
+    return _mvw_query("SRF", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 def get_all_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query(channel=None, size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
@@ -343,6 +351,23 @@ def save_favorites(favorites_raw):
             json.dump(favorites_raw, f, ensure_ascii=False)
     except Exception as e:
         _log("Favoriten speichern Fehler: " + str(e))
+
+
+def reorder_favorites(group_bytes_list):
+    """Speichert Favoriten in neuer Reihenfolge. group_bytes_list: Liste von group-Bytes."""
+    favs_raw = _load_favorites_raw()
+    name_to_fav = {}
+    for f in favs_raw:
+        name_to_fav[f.get("group", "")] = f
+    reordered = []
+    for gb in group_bytes_list:
+        try:
+            g = gb.decode("utf-8", "replace") if isinstance(gb, bytes) else gb
+        except Exception:
+            g = str(gb)
+        if g in name_to_fav:
+            reordered.append(name_to_fav[g])
+    save_favorites(reordered)
 
 
 def add_favorite(group_bytes, channel_bytes):
@@ -412,7 +437,9 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
 
         matched = []
         try:
-            # Hole gezielt bis zu 100 Folgen genau dieser Serie
+            # Hole gezielt bis zu 100 Folgen genau dieser Serie.
+            # search_fields=["topic"] verhindert Beifang durch Trailer,
+            # deren Titel den Seriennamen enthalten aber ein anderes Topic haben.
             items, _ = _mvw_query(
                 channel=channel,
                 size=100,
@@ -420,6 +447,7 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
                 search_term=pure_topic,
                 min_duration=min_duration,
                 sort_by=sort_by,
+                search_fields=["topic"],
             )
             # Lokal auf die exakte Gruppe filtern, um unscharfen Beifang auszublenden.
             # Vergleich normalisiert: "BR: Schnittgut" gespeichert von "Alle" passt auch
@@ -456,3 +484,36 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
     # und die Gesamtzahl bleibt ueberschaubar. offset/size gelten nur fuer den API-Abruf
     # pro Gruppe (dort unveraendert), nicht fuer die zusammengefuehrte Ergebnisliste.
     return all_items, len(all_items)
+
+
+# ------------------------------------------------------------------
+# Suchverlauf
+# ------------------------------------------------------------------
+def load_search_history():
+    """Gibt die gespeicherte Suchliste zurueck (neueste zuerst)."""
+    try:
+        if os.path.exists(SEARCH_HISTORY_FILE):
+            with open(SEARCH_HISTORY_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return [e for e in data if isinstance(e, str) and e]
+    except Exception:
+        pass
+    return []
+
+
+def save_search_history(term):
+    """Fuegt einen Suchbegriff vorne ein, entfernt Duplikate und kuerzt die Liste."""
+    try:
+        if isinstance(term, bytes):
+            term = term.decode("utf-8", "replace")
+        term = str(term).strip()
+        if not term:
+            return
+        history = [e for e in load_search_history() if e != term]
+        history.insert(0, term)
+        history = history[:SEARCH_HISTORY_MAX]
+        with open(SEARCH_HISTORY_FILE, "w") as f:
+            json.dump(history, f, ensure_ascii=False)
+    except Exception as e:
+        _log("Suchverlauf speichern Fehler: " + str(e))
