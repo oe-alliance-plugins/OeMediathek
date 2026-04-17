@@ -1135,15 +1135,15 @@ class OeMediathekSearchHistoryScreen(Screen):
         Screen.__init__(self, session)
 
         self["title_label"] = Label(_b("Letzte Suchen"))
-        self["menu_list"]   = MenuList([])
-        self["hint_label"]  = Label(_b("OK = Auswählen   |   EXIT = Abbrechen"))
+        self["menu_list"] = MenuList([])
+        self["hint_label"] = Label(_b("OK = Auswählen   |   EXIT = Abbrechen"))
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions"],
             {
-                "ok":     self.on_ok,
+                "ok": self.on_ok,
                 "cancel": self.on_cancel,
-                "red":    self.on_delete,
+                "red": self.on_delete,
             },
             1,
         )

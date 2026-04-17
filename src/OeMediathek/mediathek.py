@@ -314,8 +314,10 @@ def get_dw_highlights(offset=0, size=100, search_term=None, min_duration=0, sort
 def get_orf_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("ORF", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
+
 def get_srf_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query("SRF", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+
 
 def get_all_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
     return _mvw_query(channel=None, size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)

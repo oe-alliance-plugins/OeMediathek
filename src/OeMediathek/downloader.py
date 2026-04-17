@@ -27,6 +27,8 @@ _ORF_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 
 # --------------------------------------------------------------------------
 # Redirect-Handler (Behaelt Tarn-Header bei, blockiert aber falschen Host)
 # --------------------------------------------------------------------------
+
+
 class KeepHeadersRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         newreq = HTTPRedirectHandler.redirect_request(self, req, fp, code, msg, headers, newurl)
@@ -57,6 +59,7 @@ def load_settings():
         pass
     return {}
 
+
 def save_settings(settings):
     try:
         with open(SETTINGS_FILE, "w") as f:
@@ -64,8 +67,10 @@ def save_settings(settings):
     except Exception:
         pass
 
+
 def get_save_dir():
     return load_settings().get("save_dir", DEFAULT_SAVE_DIR)
+
 
 def set_save_dir(path):
     s = load_settings()
@@ -76,6 +81,7 @@ def set_save_dir(path):
 # Hilfsfunktionen
 # --------------------------------------------------------------------------
 
+
 def _sanitize(text):
     if isinstance(text, bytes):
         text = text.decode("utf-8", "replace")
@@ -84,6 +90,7 @@ def _sanitize(text):
     text = text.replace(u"\xc4", "Ae").replace(u"\xd6", "Oe").replace(u"\xdc", "Ue")
     text = re.sub(r'[^\w\s\-]', '', text)
     return text.strip().replace(" ", "_")
+
 
 def _make_filename(title, url, topic=None):
     # m3u8 Playlisten werden als Enigma2-freundliche .ts Datei gespeichert
@@ -99,6 +106,7 @@ def _make_filename(title, url, topic=None):
         combined = safe_title
     return combined[:100] + ext
 
+
 def get_content_length(url):
     try:
         req = Request(url)
@@ -106,12 +114,12 @@ def get_content_length(url):
         req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
         req.get_method = lambda: "HEAD"
-        
+
         handlers = [KeepHeadersRedirectHandler()]
         if _ssl_context:
             handlers.append(HTTPSHandler(context=_ssl_context))
         opener = build_opener(*handlers)
-        
+
         resp = opener.open(req, timeout=10)
         length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
         if length:
@@ -119,6 +127,7 @@ def get_content_length(url):
     except Exception:
         pass
     return 0
+
 
 def format_size(size_bytes):
     if size_bytes <= 0:
@@ -132,6 +141,7 @@ def format_size(size_bytes):
 # --------------------------------------------------------------------------
 # Download
 # --------------------------------------------------------------------------
+
 
 class Downloader(object):
     CHUNK_SIZE = 256 * 1024
@@ -167,7 +177,6 @@ class Downloader(object):
     def cancel(self):
         """Bricht den laufenden Download ab."""
         self._cancelled = True
-
 
     def _download_m3u8(self, opener, url):
         """Laedt HLS-Streams (m3u8) herunter, indem alle .ts-Segmente aneinandergehaengt werden."""
