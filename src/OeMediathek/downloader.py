@@ -10,9 +10,9 @@ import subprocess
 
 # Python 2/3 Kompatibilitaet
 try:
-    from urllib2 import urlopen, Request, HTTPRedirectHandler, build_opener, HTTPSHandler
+    from urllib2 import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
 except ImportError:
-    from urllib.request import urlopen, Request, HTTPRedirectHandler, build_opener, HTTPSHandler
+    from urllib.request import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
 
 try:
     import ssl

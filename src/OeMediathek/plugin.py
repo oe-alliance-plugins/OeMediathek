@@ -75,7 +75,7 @@ from .mediathek import (
     save_search_history,
 )
 from .player import play_stream
-from .downloader import Downloader, get_save_dir, set_save_dir, get_content_length, format_size, get_auto_convert, set_auto_convert, convert_mp4_to_ts, get_tile_wrap_lr, set_tile_wrap_lr
+from .downloader import Downloader, get_save_dir, set_save_dir, format_size, get_auto_convert, set_auto_convert, convert_mp4_to_ts, get_tile_wrap_lr, set_tile_wrap_lr
 from .download_manager import OeMediathekDownloadManagerScreen
 
 LOGO_DIR = os.path.join(os.path.dirname(__file__), "logos")
