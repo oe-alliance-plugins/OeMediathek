@@ -1191,7 +1191,6 @@ class OeMediathekSearchHistoryScreen(Screen):
 
         self["title_label"] = Label(_b("Letzte Suchen"))
         self["menu_list"] = MenuList([])
-        self["hint_label"] = Label(_b("OK = Auswählen   |   EXIT = Abbrechen"))
         self["hint_red"] = Label(_b("Löschen"))
         self["hint_ok"] = Label(_b("OK = Auswählen"))
         self["hint_label"] = Label(_b("EXIT = Abbrechen"))
