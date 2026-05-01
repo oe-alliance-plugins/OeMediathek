@@ -78,26 +78,32 @@ def set_save_dir(path):
     s["save_dir"] = path
     save_settings(s)
 
+
 def get_auto_convert():
     return load_settings().get("auto_convert_ts", False)
+
 
 def set_auto_convert(enabled):
     s = load_settings()
     s["auto_convert_ts"] = bool(enabled)
     save_settings(s)
 
+
 def get_tile_wrap_lr():
     return load_settings().get("tile_wrap_lr", True)
+
 
 def set_tile_wrap_lr(enabled):
     s = load_settings()
     s["tile_wrap_lr"] = bool(enabled)
     save_settings(s)
 
+
 def write_info_txt(filepath, title, description=None, duration=None, topic=None):
     """Schreibt eine .txt Datei mit Sendungsinfos neben die Download-Datei."""
     try:
         txt_path = os.path.splitext(filepath)[0] + ".txt"
+
         def _dec(v):
             if isinstance(v, bytes):
                 return v.decode("utf-8", "replace")
@@ -120,6 +126,7 @@ def write_info_txt(filepath, title, description=None, duration=None, topic=None)
                 f.write(u"\n\n".join(lines).encode("utf-8"))
     except Exception:
         pass
+
 
 def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
     """Konvertiert mp4_path verlustfrei zu .ts (ffmpeg -c copy) in einem Background-Thread."""
@@ -226,8 +233,8 @@ class Downloader(object):
         self.url = url
         self.title = title
         self.description = description
-        self.duration    = duration
-        self.topic       = topic
+        self.duration = duration
+        self.topic = topic
         self.on_progress = on_progress
         self.on_done = on_done
         self.on_error = on_error

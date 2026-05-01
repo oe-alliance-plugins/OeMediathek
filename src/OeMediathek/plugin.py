@@ -1345,28 +1345,28 @@ class OeMediathekScreen(Screen):
         self.sort_mode = "timestamp"
         self._sv_mode = False   # True = Sendung-verpasst?-Filter aktiv
         self._sv_sn_pending = None
-        self._fav_sort_mode = False # True = Favoriten-Sortiermodus aktiv
-        self._fav_grabbed = None # Index des gegriffenen Favoriten
-        self._fav_order_backup = None # Backup der Reihenfolge vor dem Sortieren
+        self._fav_sort_mode = False  # True = Favoriten-Sortiermodus aktiv
+        self._fav_grabbed = None  # Index des gegriffenen Favoriten
+        self._fav_order_backup = None  # Backup der Reihenfolge vor dem Sortieren
         self._fav_show_episodes = False  # True = Episode-Favoriten-Ansicht aktiv
         self._ep_fav_sort_mode = False   # True = Sortiermodus in Episode-Favoriten
-        self._ep_fav_grabbed   = None    # Index des gegriffenen Episode-Favoriten
-        self._ep_fav_order_backup = None # Backup der Reihenfolge
-        self._ep_sort_mode     = "timestamp"  # Sortierung in Episodenansicht
-        self._ep_api_has_more = False # API hat noch Daten nach letztem Episoden-Fetch
+        self._ep_fav_grabbed = None    # Index des gegriffenen Episode-Favoriten
+        self._ep_fav_order_backup = None  # Backup der Reihenfolge
+        self._ep_sort_mode = "timestamp"  # Sortierung in Episodenansicht
+        self._ep_api_has_more = False  # API hat noch Daten nach letztem Episoden-Fetch
         self._ep_next_api_offset = 0  # Naechster API-Offset fuer Episoden-Paging
         self._sn_mode = False   # True = Demnächst-Filter aktiv
 
         self._fetching = False
-        self._loaded        = False   # False bis erster Fetch abgeschlossen
+        self._loaded = False   # False bis erster Fetch abgeschlossen
         self._fetch_target = "groups"
         self._fetch_result = []
         self._fetch_episodes_result = []
         self._fetch_alpha_result = []
         self._fetch_total = 0
         self._fetch_error = None
-        self._az_items      = []  # A-Z Fetch-Ergebnis, trennt Paging-Items von all_items
-        self._paged_total   = 0   # _fetch_total des letzten normalen (paginieren) Fetches
+        self._az_items = []  # A-Z Fetch-Ergebnis, trennt Paging-Items von all_items
+        self._paged_total = 0   # _fetch_total des letzten normalen (paginieren) Fetches
         self._paged_has_more = False
         self._groups_next_api_offset = 0  # Naechster API-Offset fuer Gruppen-Paging
 
@@ -1491,7 +1491,7 @@ class OeMediathekScreen(Screen):
                     sort_by=api_sort,
                 )
                 self._fetch_result = result
-                self._fetch_total  = total
+                self._fetch_total = total
             else:
                 # Normales Paging: einen Request mit groesserer Treffermenge
                 FETCH_SIZE = PAGE_SIZE * 5
@@ -1504,9 +1504,9 @@ class OeMediathekScreen(Screen):
                     sort_by=api_sort,
                 )
                 self._fetch_result = res
-                self._fetch_total  = total
+                self._fetch_total = total
                 self._fetch_next_api_offset = api_offset + FETCH_SIZE
-                self._fetch_last_rc_full    = (rc >= FETCH_SIZE)
+                self._fetch_last_rc_full = (rc >= FETCH_SIZE)
         except Exception:
             self._fetch_error = _fmt_exc()
         self._fetching = False
@@ -1615,7 +1615,6 @@ class OeMediathekScreen(Screen):
         """Einmaliger Timer-Callback: erzwingt Beschreibung nach Rendering."""
         self.last_index = -2
         self._update_desc()
-
 
     # Sender mit zu wenigen Eintraegen fuer "Sendung verpasst?" / "Demnaechst" (< 50/Woche)
     _NO_SN_SOURCES = frozenset([
@@ -2054,7 +2053,7 @@ class OeMediathekScreen(Screen):
                 return
 
             desc = item.get("description", b"")
-            dur  = item.get("duration", b"")
+            dur = item.get("duration", b"")
             dl_topic = item.get("group") or self.cur_group_name if self.cur_group_name.startswith(b">> Direkte Treffer") else self.cur_group_name
 
             # Läuft bereits ein Download → in Queue einreihen
@@ -2920,7 +2919,7 @@ class OeMediathekScreen(Screen):
         self.mode = MODE_EPISODES
         self.last_index = -1
         self._ep_fav_sort_mode = False
-        self._ep_fav_grabbed   = None
+        self._ep_fav_grabbed = None
         self._ep_fav_order_backup = None
         self._ep_fav_update_hints()
         self._update_info_hint()
@@ -3183,8 +3182,8 @@ class OeMediathekSettingsScreen(Screen):
     # Einträge: (label_text, action_id, status_fn_or_None)
     # action_id: 0=Browse, 1=ToggleConvert, 2=ResetOrder, 3=ToggleWrapLR
     _ENTRIES = [
-        ("Download-Ordner",               0, None),
-        ("MP4 -> TS Konvertierung:",       1, get_auto_convert),
+        ("Download-Ordner", 0, None),
+        ("MP4 -> TS Konvertierung:", 1, get_auto_convert),
         ("Seite wechseln mit Links/Rechts:", 3, get_tile_wrap_lr),
         ("Reihenfolge zurücksetzen", 2, None),
     ]
@@ -3193,17 +3192,17 @@ class OeMediathekSettingsScreen(Screen):
     if IS_FHD:
         _L = (40, 115, 56, 42, 34, 28, 800, 516, 120)
     else:
-        _L = (27,  76, 37, 28, 22, 19, 534, 344,  80)
+        _L = (27, 76, 37, 28, 22, 19, 534, 344, 80)
 
     @classmethod
     def _make_skin(cls):
         x, y0, rh, ft, fr, fh, w, h, sw = cls._L
         iw = w - 2 * x        # innere Breite
         lw = iw - sw - 10     # Label-Breite (links)
-        n  = len(cls._ENTRIES)
+        n = len(cls._ENTRIES)
         list_h = n * rh
         y_line1 = y0 - 5
-        y_hint  = y0 + list_h + 10
+        y_hint = y0 + list_h + 10
         y_line2 = y_hint - 5
         total_h = y_hint + fh + 15
 
@@ -3214,7 +3213,7 @@ class OeMediathekSettingsScreen(Screen):
             <widget name="sel_{i}"   position="{x},{ry}"  size="{iw},{rh}" backgroundColor="#1A0066FF" zPosition="-3" />
             <widget name="lbl_{i}"   position="{x},{ry}"  size="{lw},{rh}" font="Regular;{fr}" valign="center" foregroundColor="#FFFFFF" transparent="1" />
             <widget name="stat_{i}"  position="{sx},{ry}" size="{sw},{rh}" font="Regular;{fr}" valign="center" halign="right" foregroundColor="#FFDD00" transparent="1" />
-            """.format(i=i, x=x, ry=ry, iw=iw, rh=rh, lw=lw, sx=x+lw+10, sw=sw, fr=fr)
+            """.format(i=i, x=x, ry=ry, iw=iw, rh=rh, lw=lw, sx=x + lw + 10, sw=sw, fr=fr)
 
         return """
         <screen name="OeMediathekSettingsScreen" position="{px},{py}" size="{w},{total_h}" flags="wfNoBorder">
@@ -3243,10 +3242,10 @@ class OeMediathekSettingsScreen(Screen):
         self["hint_label"] = Label(_b("OK = Auswählen   |   EXIT = Schließen"))
 
         for i, (label, _, _fn) in enumerate(self._ENTRIES):
-            self["lbl_%d"  % i] = Label(_b(label))
+            self["lbl_%d" % i] = Label(_b(label))
             self["stat_%d" % i] = Label(_b(""))
-            self["sel_%d"  % i] = Label(_b(""))
-            self["sel_%d"  % i].hide()
+            self["sel_%d" % i] = Label(_b(""))
+            self["sel_%d" % i].hide()
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"],
@@ -3390,7 +3389,7 @@ class OeMediathekDownloadScreen(Screen):
         self._dl_done = False
         self._dl_err = None
         self._dl_filepath = None
-        self._dl_downloaded  = 0
+        self._dl_downloaded = 0
         self._dl_total = 0
         self._dl_done = False
         self._dl_err = None
@@ -3473,9 +3472,9 @@ class OeMediathekDownloadScreen(Screen):
         self._dl_err = msg
 
     def _cb_convert_done(self, ts_path):
-        self._dl_filepath   = ts_path
+        self._dl_filepath = ts_path
         self._dl_converting = False
-        self._dl_done       = True
+        self._dl_done = True
 
     def _cb_convert_error(self, msg):
         self._dl_converting = False

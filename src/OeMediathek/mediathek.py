@@ -16,10 +16,10 @@ except Exception:
 
 LOG_FILE = "/tmp/oemediathek.log"
 FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
-FAVORITES_FILE         = "/etc/enigma2/oemediathek_favorites.json"
+FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
 EPISODE_FAVORITES_FILE = "/etc/enigma2/oemediathek_episode_favorites.json"
-WATCHED_FILE           = "/etc/enigma2/oemediathek_watched.json"
-SEARCH_HISTORY_FILE    = "/etc/enigma2/oemediathek_search_history.json"
+WATCHED_FILE = "/etc/enigma2/oemediathek_watched.json"
+SEARCH_HISTORY_FILE = "/etc/enigma2/oemediathek_search_history.json"
 SEARCH_HISTORY_MAX = 10
 DEBUG = False
 
