@@ -3,6 +3,7 @@
 # Holt Sendungslisten über MediathekViewWeb-API (aggregiert alle ÖR-Sender)
 
 import json
+import io
 import os
 import threading
 
@@ -15,7 +16,6 @@ except Exception:
     _ssl_context = None
 
 LOG_FILE = "/tmp/oemediathek.log"
-FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
 FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
 EPISODE_FAVORITES_FILE = "/etc/enigma2/oemediathek_episode_favorites.json"
 WATCHED_FILE = "/etc/enigma2/oemediathek_watched.json"
@@ -337,7 +337,7 @@ _SV_SN_NAMES = {">> Sendung verpasst?", ">> Demn\u00e4chst"}
 def _load_favorites_raw():
     try:
         if os.path.exists(FAVORITES_FILE):
-            with open(FAVORITES_FILE, "r") as f:
+            with io.open(FAVORITES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     # Sondereintraege (SV/SN) bereinigen falls versehentlich gespeichert
@@ -353,7 +353,7 @@ def _load_favorites_raw():
 def save_favorites(favorites_raw):
     """favorites_raw: Liste von {"group": unicode-str, "channel": unicode-str}"""
     try:
-        with open(FAVORITES_FILE, "w") as f:
+        with io.open(FAVORITES_FILE, "w", encoding="utf-8") as f:
             json.dump(favorites_raw, f, ensure_ascii=False)
     except Exception as e:
         _log("Favoriten speichern Fehler: " + str(e))
@@ -418,7 +418,7 @@ def is_favorite(group_bytes):
 def _load_watched():
     try:
         if os.path.exists(WATCHED_FILE):
-            with open(WATCHED_FILE, "r") as f:
+            with io.open(WATCHED_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     return set(data)
@@ -429,7 +429,7 @@ def _load_watched():
 
 def _save_watched(watched_set):
     try:
-        with open(WATCHED_FILE, "w") as f:
+        with io.open(WATCHED_FILE, "w", encoding="utf-8") as f:
             json.dump(list(watched_set), f, ensure_ascii=False)
     except Exception as e:
         _log("Watched speichern Fehler: " + str(e))
@@ -467,7 +467,7 @@ def _load_episode_favorites():
         return _episode_favorites_cache
     try:
         if os.path.exists(EPISODE_FAVORITES_FILE):
-            with open(EPISODE_FAVORITES_FILE, "r") as f:
+            with io.open(EPISODE_FAVORITES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     _episode_favorites_cache = data
@@ -482,7 +482,7 @@ def _save_episode_favorites(items):
     global _episode_favorites_cache
     _episode_favorites_cache = items
     try:
-        with open(EPISODE_FAVORITES_FILE, "w") as f:
+        with io.open(EPISODE_FAVORITES_FILE, "w", encoding="utf-8") as f:
             json.dump(items, f, ensure_ascii=False)
     except Exception as e:
         _log("Episode-Favoriten speichern Fehler: " + str(e))
@@ -638,7 +638,7 @@ def load_search_history():
     """Gibt die gespeicherte Suchliste zurueck (neueste zuerst)."""
     try:
         if os.path.exists(SEARCH_HISTORY_FILE):
-            with open(SEARCH_HISTORY_FILE, "r") as f:
+            with io.open(SEARCH_HISTORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     return [e for e in data if isinstance(e, str) and e]
@@ -658,7 +658,7 @@ def save_search_history(term):
         history = [e for e in load_search_history() if e != term]
         history.insert(0, term)
         history = history[:SEARCH_HISTORY_MAX]
-        with open(SEARCH_HISTORY_FILE, "w") as f:
+        with io.open(SEARCH_HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, ensure_ascii=False)
     except Exception as e:
         _log("Suchverlauf speichern Fehler: " + str(e))

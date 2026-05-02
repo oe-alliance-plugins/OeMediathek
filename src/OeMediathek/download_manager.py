@@ -161,7 +161,12 @@ class OeMediathekDownloadManagerScreen(Screen):
     def _cancel_all(self):
         try:
             import sys
-            _plugin = sys.modules.get("plugin")
+            pkg = __package__ or ""
+            _plugin = (sys.modules.get(pkg + ".plugin") if pkg else None)
+            if _plugin is None:
+                _plugin = sys.modules.get("Plugins.Extensions.OeMediathek.plugin")
+            if _plugin is None:
+                _plugin = sys.modules.get("plugin")
             if _plugin is not None:
                 _plugin._download_queue = []
                 _plugin._active_downloader = None

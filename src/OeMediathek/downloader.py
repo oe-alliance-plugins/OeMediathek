@@ -3,16 +3,17 @@
 # HTTP-Download fuer OeMediathek — laedt MP4/TS-Streams direkt auf die Festplatte
 
 import os
+import io
 import json
 import threading
 import re
 import subprocess
 
-# Python 2/3 Kompatibilitaet
+# Python 3 first, with Python 2 fallback for older Enigma2 images.
 try:
-    from urllib2 import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
-except ImportError:
     from urllib.request import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
+except ImportError:
+    from urllib2 import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
 
 try:
     import ssl
@@ -52,7 +53,7 @@ class KeepHeadersRedirectHandler(HTTPRedirectHandler):
 def load_settings():
     try:
         if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r") as f:
+            with io.open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
                     return data
@@ -63,7 +64,7 @@ def load_settings():
 
 def save_settings(settings):
     try:
-        with open(SETTINGS_FILE, "w") as f:
+        with io.open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, ensure_ascii=False)
     except Exception:
         pass
@@ -122,8 +123,8 @@ def write_info_txt(filepath, title, description=None, duration=None, topic=None)
         if top and top.lower() != t.lower():
             lines.append(u"Sendung: " + top)
         if lines:
-            with open(txt_path, "w") as f:
-                f.write(u"\n\n".join(lines).encode("utf-8"))
+            with io.open(txt_path, "w", encoding="utf-8") as f:
+                f.write(u"\n\n".join(lines))
     except Exception:
         pass
 
@@ -285,18 +286,18 @@ class Downloader(object):
                             break
             if sub_url:
                 try:
-                    from urlparse import urljoin
-                except ImportError:
                     from urllib.parse import urljoin
+                except ImportError:
+                    from urlparse import urljoin
                 if not sub_url.startswith("http"):
                     sub_url = urljoin(url, sub_url)
                 return self._download_m3u8(opener, sub_url)
 
         segments = []
         try:
-            from urlparse import urljoin
-        except ImportError:
             from urllib.parse import urljoin
+        except ImportError:
+            from urlparse import urljoin
 
         for line in lines:
             line = line.strip()
