@@ -132,187 +132,188 @@ def _b(val):
     """Alias für Text-Normalisierung; historische Aufrufer dürfen bleiben."""
     return _u(val)
 
+
 LIVE_EVENT_GROUPS = [
     # (Gruppenname, [(Anzeigename, Stream-URL), ...])
     ("Arte Concert", [
-        ("Arte Concert",              "https://arteconcerthls.akamaized.net/hls/live/2025494/channel01/master.m3u8"),
+        ("Arte Concert", "https://arteconcerthls.akamaized.net/hls/live/2025494/channel01/master.m3u8"),
     ]),
     ("ARD / Sportschau", [
-        ("ARD Event 1 (weltweit)",    "https://ardevent1.akamaized.net/hls/live/681511/wdr_msl4_ardevent1/master.m3u8"),
-        ("ARD Event 2 (DE)",          "https://ardevent2.akamaized.net/hls/live/681512/wdr_msl4_ardevent2/master.m3u8"),
-        ("Sportschau Event 1",        "http://sportschau-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
-        ("Sportschau Event 2",        "http://sportschau-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
-        ("Sportschau Event 3",        "http://sportschau-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
-        ("Sportschau Event 4",        "http://sportschau-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
-        ("Sportschau Event 5",        "http://sportschau-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
-        ("Sportschau Event 6",        "http://sportschau-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
-        ("Sportschau Event 7",        "http://sportschau-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
-        ("Sportschau Event 8",        "http://sportschau-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
-        ("Sportschau Event 9",        "http://sportschau-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
-        ("Sportschau Event 10",       "http://sportschau-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
-        ("Sportschau Event 11",       "http://sportschau-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
-        ("Sportschau Event 12",       "http://sportschau-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
-        ("Sportschau Event 13",       "http://sportschau-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
-        ("Sportschau Event 13+",      "http://sportschau-event.ard-mcdn.de/sportschau/event13-ma/hls/de/master.m3u8"),
+        ("ARD Event 1 (weltweit)", "https://ardevent1.akamaized.net/hls/live/681511/wdr_msl4_ardevent1/master.m3u8"),
+        ("ARD Event 2 (DE)", "https://ardevent2.akamaized.net/hls/live/681512/wdr_msl4_ardevent2/master.m3u8"),
+        ("Sportschau Event 1", "http://sportschau-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
+        ("Sportschau Event 2", "http://sportschau-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
+        ("Sportschau Event 3", "http://sportschau-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
+        ("Sportschau Event 4", "http://sportschau-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
+        ("Sportschau Event 5", "http://sportschau-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
+        ("Sportschau Event 6", "http://sportschau-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
+        ("Sportschau Event 7", "http://sportschau-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
+        ("Sportschau Event 8", "http://sportschau-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
+        ("Sportschau Event 9", "http://sportschau-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
+        ("Sportschau Event 10", "http://sportschau-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
+        ("Sportschau Event 11", "http://sportschau-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
+        ("Sportschau Event 12", "http://sportschau-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
+        ("Sportschau Event 13", "http://sportschau-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
+        ("Sportschau Event 13+", "http://sportschau-event.ard-mcdn.de/sportschau/event13-ma/hls/de/master.m3u8"),
     ]),
     ("WDR Spezial", [
-        ("WDR Spezial 1",             "https://wdrspezial.akamaized.net/hls/live/2012020/wdr_spezial1/index.m3u8"),
-        ("WDR Spezial 2",             "https://wdrspezial.akamaized.net/hls/live/2012067/wdr_spezial2/index.m3u8"),
-        ("WDR Spezial 3",             "https://wdrspezial.akamaized.net/hls/live/2012068/wdr_spezial3/index.m3u8"),
-        ("WDR Spezial 4",             "https://wdrspezial.akamaized.net/hls/live/2012069/wdr_spezial4/index.m3u8"),
-        ("WDR Spezial 5",             "https://wdrspezial.akamaized.net/hls/live/2012070/wdr_spezial5/index.m3u8"),
-        ("WDR Spezial 6",             "https://wdrspezial.akamaized.net/hls/live/2013621/wdr_spezial6/index.m3u8"),
-        ("WDR Spezial 7",             "https://wdrspezial.akamaized.net/hls/live/2013622/wdr_spezial7/index.m3u8"),
+        ("WDR Spezial 1", "https://wdrspezial.akamaized.net/hls/live/2012020/wdr_spezial1/index.m3u8"),
+        ("WDR Spezial 2", "https://wdrspezial.akamaized.net/hls/live/2012067/wdr_spezial2/index.m3u8"),
+        ("WDR Spezial 3", "https://wdrspezial.akamaized.net/hls/live/2012068/wdr_spezial3/index.m3u8"),
+        ("WDR Spezial 4", "https://wdrspezial.akamaized.net/hls/live/2012069/wdr_spezial4/index.m3u8"),
+        ("WDR Spezial 5", "https://wdrspezial.akamaized.net/hls/live/2012070/wdr_spezial5/index.m3u8"),
+        ("WDR Spezial 6", "https://wdrspezial.akamaized.net/hls/live/2013621/wdr_spezial6/index.m3u8"),
+        ("WDR Spezial 7", "https://wdrspezial.akamaized.net/hls/live/2013622/wdr_spezial7/index.m3u8"),
     ]),
     ("ZDF sportstudio", [
-        ("ZDF sportstudio 1",         "https://zdf-hls-01.akamaized.net/hls/live/2016296/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 2",         "https://zdf-hls-02.akamaized.net/hls/live/2016297/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 3",         "https://zdf-hls-03.akamaized.net/hls/live/2016298/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 4",         "https://zdf-hls-04.akamaized.net/hls/live/2016299/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 5",         "https://zdf-hls-05.akamaized.net/hls/live/2016300/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 6",         "https://zdf-hls-06.akamaized.net/hls/live/2016301/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 7",         "https://zdf-hls-07.akamaized.net/hls/live/2016302/de/high/master.m3u8"),
-        ("ZDF sportstudio 8",         "https://zdf-hls-08.akamaized.net/hls/live/2016303/de/high/master.m3u8"),
-        ("ZDF sportstudio 9",         "https://zdf-hls-09.akamaized.net/hls/live/2016304/de/high/master.m3u8"),
-        ("ZDF sportstudio 10",        "https://zdf-hls-10.akamaized.net/hls/live/2016305/de/high/master.m3u8"),
-        ("ZDF sportstudio 11",        "https://zdf-hls-11.akamaized.net/hls/live/2016436/de/high/master.m3u8"),
-        ("ZDF sportstudio 12",        "https://zdf-hls-12.akamaized.net/hls/live/2016495/de/high/master.m3u8"),
-        ("ZDF sportstudio 13",        "https://zdf-hls-13.akamaized.net/hls/live/2016496/de/high/master.m3u8"),
-        ("ZDF sportstudio 14",        "https://zdf-hls-14.akamaized.net/hls/live/2016497/de/high/master.m3u8"),
-        ("ZDF sportstudio 15",        "https://zdf-hls-15.akamaized.net/hls/live/2016498/de/high/master.m3u8"),
-        ("ZDF sportstudio 16",        "https://zdf-hls-16.akamaized.net/hls/live/2016499/de/high/master.m3u8"),
-        ("ZDF sportstudio 17",        "https://zdf-hls-17.akamaized.net/hls/live/2016500/de/high/master.m3u8"),
-        ("ZDF sportstudio 19",        "https://zdf-hls-19.akamaized.net/hls/live/2016502/de/high/master.m3u8"),
-        ("ZDF sportstudio 20",        "https://zdf-hls-20.akamaized.net/hls/live/2016503/de/high/master.m3u8"),
-        ("ZDF sportstudio 21",        "https://zdf-hls-21.akamaized.net/hls/live/2016504/de/high/master.m3u8"),
-        ("ZDF sportstudio 22",        "https://zdf-hls-22.akamaized.net/hls/live/2016505/de/high/master.m3u8"),
-        ("ZDF sportstudio 23",        "https://zdf-hls-23.akamaized.net/hls/live/2016506/de/high/master.m3u8"),
+        ("ZDF sportstudio 1", "https://zdf-hls-01.akamaized.net/hls/live/2016296/de/veryhigh/master.m3u8"),
+        ("ZDF sportstudio 2", "https://zdf-hls-02.akamaized.net/hls/live/2016297/de/veryhigh/master.m3u8"),
+        ("ZDF sportstudio 3", "https://zdf-hls-03.akamaized.net/hls/live/2016298/de/veryhigh/master.m3u8"),
+        ("ZDF sportstudio 4", "https://zdf-hls-04.akamaized.net/hls/live/2016299/de/veryhigh/master.m3u8"),
+        ("ZDF sportstudio 5", "https://zdf-hls-05.akamaized.net/hls/live/2016300/de/veryhigh/master.m3u8"),
+        ("ZDF sportstudio 6", "https://zdf-hls-06.akamaized.net/hls/live/2016301/de/veryhigh/master.m3u8"),
+        ("ZDF sportstudio 7", "https://zdf-hls-07.akamaized.net/hls/live/2016302/de/high/master.m3u8"),
+        ("ZDF sportstudio 8", "https://zdf-hls-08.akamaized.net/hls/live/2016303/de/high/master.m3u8"),
+        ("ZDF sportstudio 9", "https://zdf-hls-09.akamaized.net/hls/live/2016304/de/high/master.m3u8"),
+        ("ZDF sportstudio 10", "https://zdf-hls-10.akamaized.net/hls/live/2016305/de/high/master.m3u8"),
+        ("ZDF sportstudio 11", "https://zdf-hls-11.akamaized.net/hls/live/2016436/de/high/master.m3u8"),
+        ("ZDF sportstudio 12", "https://zdf-hls-12.akamaized.net/hls/live/2016495/de/high/master.m3u8"),
+        ("ZDF sportstudio 13", "https://zdf-hls-13.akamaized.net/hls/live/2016496/de/high/master.m3u8"),
+        ("ZDF sportstudio 14", "https://zdf-hls-14.akamaized.net/hls/live/2016497/de/high/master.m3u8"),
+        ("ZDF sportstudio 15", "https://zdf-hls-15.akamaized.net/hls/live/2016498/de/high/master.m3u8"),
+        ("ZDF sportstudio 16", "https://zdf-hls-16.akamaized.net/hls/live/2016499/de/high/master.m3u8"),
+        ("ZDF sportstudio 17", "https://zdf-hls-17.akamaized.net/hls/live/2016500/de/high/master.m3u8"),
+        ("ZDF sportstudio 19", "https://zdf-hls-19.akamaized.net/hls/live/2016502/de/high/master.m3u8"),
+        ("ZDF sportstudio 20", "https://zdf-hls-20.akamaized.net/hls/live/2016503/de/high/master.m3u8"),
+        ("ZDF sportstudio 21", "https://zdf-hls-21.akamaized.net/hls/live/2016504/de/high/master.m3u8"),
+        ("ZDF sportstudio 22", "https://zdf-hls-22.akamaized.net/hls/live/2016505/de/high/master.m3u8"),
+        ("ZDF sportstudio 23", "https://zdf-hls-23.akamaized.net/hls/live/2016506/de/high/master.m3u8"),
     ]),
     ("HR Event", [
-        ("HR Event 1",                "http://hr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
-        ("HR Event 2",                "http://hr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
-        ("HR Event 3",                "http://hr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
-        ("HR Event 4",                "http://hr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
-        ("HR Event 5",                "http://hr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
-        ("HR Event 6",                "http://hr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
-        ("HR Event 7",                "http://hr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
-        ("HR Event 8",                "http://hr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
-        ("HR Event 9",                "http://hr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
-        ("HR Event 10",               "http://hr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
-        ("HR Event 11",               "http://hr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
-        ("HR Event 12",               "http://hr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
-        ("HR Event 13",               "http://hr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
+        ("HR Event 1", "http://hr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
+        ("HR Event 2", "http://hr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
+        ("HR Event 3", "http://hr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
+        ("HR Event 4", "http://hr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
+        ("HR Event 5", "http://hr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
+        ("HR Event 6", "http://hr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
+        ("HR Event 7", "http://hr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
+        ("HR Event 8", "http://hr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
+        ("HR Event 9", "http://hr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
+        ("HR Event 10", "http://hr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
+        ("HR Event 11", "http://hr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
+        ("HR Event 12", "http://hr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
+        ("HR Event 13", "http://hr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
     ]),
     ("MDR Event", [
-        ("MDR Event 1",               "http://mdr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
-        ("MDR Event 2",               "http://mdr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
-        ("MDR Event 3",               "http://mdr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
-        ("MDR Event 4",               "http://mdr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
-        ("MDR Event 5",               "http://mdr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
-        ("MDR Event 6",               "http://mdr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
-        ("MDR Event 7",               "http://mdr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
-        ("MDR Event 8",               "http://mdr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
-        ("MDR Event 9",               "http://mdr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
-        ("MDR Event 10",              "http://mdr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
-        ("MDR Event 11",              "http://mdr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
-        ("MDR Event 12",              "http://mdr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
-        ("MDR Event 13",              "http://mdr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
+        ("MDR Event 1", "http://mdr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
+        ("MDR Event 2", "http://mdr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
+        ("MDR Event 3", "http://mdr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
+        ("MDR Event 4", "http://mdr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
+        ("MDR Event 5", "http://mdr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
+        ("MDR Event 6", "http://mdr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
+        ("MDR Event 7", "http://mdr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
+        ("MDR Event 8", "http://mdr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
+        ("MDR Event 9", "http://mdr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
+        ("MDR Event 10", "http://mdr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
+        ("MDR Event 11", "http://mdr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
+        ("MDR Event 12", "http://mdr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
+        ("MDR Event 13", "http://mdr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
     ]),
     ("BR Event", [
-        ("BR Event 1",                "https://brevent.akamaized.net/hls/live/2004894/br_event_01/master.m3u8"),
-        ("BR Event 2",                "https://brevent.akamaized.net/hls/live/2004895/br_event_02/master.m3u8"),
-        ("BR Event 3",                "https://brevent.akamaized.net/hls/live/2004896/br_event_03/master.m3u8"),
-        ("BR Event 4",                "https://brevent.akamaized.net/hls/live/2004897/br_event_04/master.m3u8"),
+        ("BR Event 1", "https://brevent.akamaized.net/hls/live/2004894/br_event_01/master.m3u8"),
+        ("BR Event 2", "https://brevent.akamaized.net/hls/live/2004895/br_event_02/master.m3u8"),
+        ("BR Event 3", "https://brevent.akamaized.net/hls/live/2004896/br_event_03/master.m3u8"),
+        ("BR Event 4", "https://brevent.akamaized.net/hls/live/2004897/br_event_04/master.m3u8"),
     ]),
     ("SWR Event", [
-        ("SWR Event 1",               "https://swrevent01hls.akamaized.net/hls/live/2023986/swrevent01/master.m3u8"),
-        ("SWR Event 2",               "https://swrevent02hls.akamaized.net/hls/live/2023987/swrevent02/master.m3u8"),
-        ("SWR Event 3",               "https://swrevent03hls.akamaized.net/hls/live/2023988/swrevent03/master.m3u8"),
-        ("SWR Event 4",               "https://swrevent04hls.akamaized.net/hls/live/2023989/swrevent04/master.m3u8"),
+        ("SWR Event 1", "https://swrevent01hls.akamaized.net/hls/live/2023986/swrevent01/master.m3u8"),
+        ("SWR Event 2", "https://swrevent02hls.akamaized.net/hls/live/2023987/swrevent02/master.m3u8"),
+        ("SWR Event 3", "https://swrevent03hls.akamaized.net/hls/live/2023988/swrevent03/master.m3u8"),
+        ("SWR Event 4", "https://swrevent04hls.akamaized.net/hls/live/2023989/swrevent04/master.m3u8"),
     ]),
     ("RBB Event", [
-        ("RBB Event 1",               "https://rbbevent01-hls.akamaized.net/hls/live/2032067/rbbevent01/master.m3u8"),
-        ("RBB Event 2",               "https://rbbevent02-hls.akamaized.net/hls/live/2032068/rbbevent02/master.m3u8"),
+        ("RBB Event 1", "https://rbbevent01-hls.akamaized.net/hls/live/2032067/rbbevent01/master.m3u8"),
+        ("RBB Event 2", "https://rbbevent02-hls.akamaized.net/hls/live/2032068/rbbevent02/master.m3u8"),
     ]),
     ("Radio Bremen", [
-        ("Radio Bremen Event 1",      "https://rbhlsevent1.akamaized.net/hls/live/2031942/rbhlsevent1/master.m3u8"),
-        ("Radio Bremen Event 2",      "https://rbhlsevent2.akamaized.net/hls/live/2031943/rbhlsevent2/master.m3u8"),
+        ("Radio Bremen Event 1", "https://rbhlsevent1.akamaized.net/hls/live/2031942/rbhlsevent1/master.m3u8"),
+        ("Radio Bremen Event 2", "https://rbhlsevent2.akamaized.net/hls/live/2031943/rbhlsevent2/master.m3u8"),
     ]),
 ]
 
 LIVE_STREAM_GROUPS = [
     # (Gruppenname, [(Anzeigename, URL), ...]) — alphabetisch nach Gruppenname
     ("3sat", [
-        ("3sat",                      "https://zdf-hls-18.akamaized.net/hls/live/2016501/dach/high/master.m3u8"),
+        ("3sat", "https://zdf-hls-18.akamaized.net/hls/live/2016501/dach/high/master.m3u8"),
     ]),
     ("ARD Das Erste", [
-        ("Das Erste (DE)",            "http://daserste-live.ard-mcdn.de/daserste/live/hls/de/master.m3u8"),
+        ("Das Erste (DE)", "http://daserste-live.ard-mcdn.de/daserste/live/hls/de/master.m3u8"),
         ("Das Erste (International)", "http://daserste-live.ard-mcdn.de/daserste/live/hls/int/master.m3u8"),
     ]),
     ("ARD alpha", [
-        ("ARD alpha (DE)",            "http://mcdn.br.de/br/fs/ard_alpha/hls/de/master.m3u8"),
+        ("ARD alpha (DE)", "http://mcdn.br.de/br/fs/ard_alpha/hls/de/master.m3u8"),
         ("ARD alpha (International)", "http://mcdn.br.de/br/fs/ard_alpha/hls/int/master.m3u8"),
     ]),
     ("Arte", [
-        ("Arte (Deutsch)",            "https://arteliveext.akamaized.net/hls/live/2030993/artelive_de/index.m3u8"),
-        ("Arte (Français)",          "https://artesimulcast.akamaized.net/hls/live/2031003/artelive_fr/index.m3u8"),
+        ("Arte (Deutsch)", "https://arteliveext.akamaized.net/hls/live/2030993/artelive_de/index.m3u8"),
+        ("Arte (Français)", "https://artesimulcast.akamaized.net/hls/live/2031003/artelive_fr/index.m3u8"),
     ]),
     ("BR", [
-        ("BR Süd (DE)",              "http://mcdn.br.de/br/fs/bfs_sued/hls/de/master.m3u8"),
+        ("BR Süd (DE)", "http://mcdn.br.de/br/fs/bfs_sued/hls/de/master.m3u8"),
         ("BR Süd (International)", "http://mcdn.br.de/br/fs/bfs_sued/hls/int/master.m3u8"),
-        ("BR Nord",                   "http://mcdn.br.de/br/fs/bfs_nord/hls/de/master.m3u8"),
+        ("BR Nord", "http://mcdn.br.de/br/fs/bfs_nord/hls/de/master.m3u8"),
     ]),
     ("DW", [
-        ("DW",                        "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8"),
+        ("DW", "https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8"),
     ]),
     ("HR", [
-        ("HR",                        "http://hr-live.ard-mcdn.de/hr/live/hls/de/master.m3u8"),
+        ("HR", "http://hr-live.ard-mcdn.de/hr/live/hls/de/master.m3u8"),
     ]),
     ("KiKA", [
-        ("KiKA",                      "http://kika-live.ard-mcdn.de/kika/live/hls/de/master.m3u8"),
+        ("KiKA", "http://kika-live.ard-mcdn.de/kika/live/hls/de/master.m3u8"),
     ]),
     ("MDR", [
-        ("MDR",                       "http://mdr-live.ard-mcdn.de/mdr/live/hls/de/master.m3u8"),
+        ("MDR", "http://mdr-live.ard-mcdn.de/mdr/live/hls/de/master.m3u8"),
     ]),
     ("NDR", [
-        ("NDR Niedersachsen",         "http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_nds/master.m3u8"),
-        ("NDR Hamburg",               "http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_hh/master.m3u8"),
-        ("NDR Mecklenburg-Vorpommern","http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_mv/master.m3u8"),
-        ("NDR Schleswig-Holstein",    "http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_sh/master.m3u8"),
+        ("NDR Niedersachsen", "http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_nds/master.m3u8"),
+        ("NDR Hamburg", "http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_hh/master.m3u8"),
+        ("NDR Mecklenburg-Vorpommern", "http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_mv/master.m3u8"),
+        ("NDR Schleswig-Holstein", "http://mcdn.ndr.de/ndr/hls/ndr_fs/ndr_sh/master.m3u8"),
     ]),
     ("ONE", [
-        ("ONE",                       "http://mcdn-one.ard.de/ardone/hls/master.m3u8"),
+        ("ONE", "http://mcdn-one.ard.de/ardone/hls/master.m3u8"),
     ]),
     ("PHOENIX", [
-        ("PHOENIX",                   "https://zdf-hls-19.akamaized.net/hls/live/2016502/de/high/master.m3u8"),
+        ("PHOENIX", "https://zdf-hls-19.akamaized.net/hls/live/2016502/de/high/master.m3u8"),
     ]),
     ("RBB", [
-        ("RBB Berlin",                "http://rbb-live.ard-mcdn.de/rbb/berlin/hls/de/master.m3u8"),
-        ("RBB Brandenburg",           "http://rbb-live.ard-mcdn.de/rbb/brandenburg/hls/de/master.m3u8"),
+        ("RBB Berlin", "http://rbb-live.ard-mcdn.de/rbb/berlin/hls/de/master.m3u8"),
+        ("RBB Brandenburg", "http://rbb-live.ard-mcdn.de/rbb/brandenburg/hls/de/master.m3u8"),
     ]),
     ("Radio Bremen TV", [
-        ("Radio Bremen TV",           "https://rbhlslive.akamaized.net/hls/live/2020435/rbfs/master.m3u8"),
+        ("Radio Bremen TV", "https://rbhlslive.akamaized.net/hls/live/2020435/rbfs/master.m3u8"),
     ]),
     ("SR", [
-        ("SR",                        "http://sr-live.ard-mcdn.de/sr/live/hls/de/master.m3u8"),
+        ("SR", "http://sr-live.ard-mcdn.de/sr/live/hls/de/master.m3u8"),
     ]),
     ("SWR", [
-        ("SWR",                       "http://mcdn.swr.de/swr/swrbwd/master.m3u8"),
+        ("SWR", "http://mcdn.swr.de/swr/swrbwd/master.m3u8"),
     ]),
     ("WDR", [
-        ("WDR",                       "http://wdr-live.ard-mcdn.de/wdr/live/hls/de/master.m3u8"),
+        ("WDR", "http://wdr-live.ard-mcdn.de/wdr/live/hls/de/master.m3u8"),
     ]),
     ("ZDF", [
-        ("ZDF",                       "https://zdf-hls-15.akamaized.net/hls/live/2016498/de/high/master.m3u8"),
+        ("ZDF", "https://zdf-hls-15.akamaized.net/hls/live/2016498/de/high/master.m3u8"),
     ]),
     ("ZDFinfo", [
-        ("ZDFinfo",                   "https://zdf-hls-17.akamaized.net/hls/live/2016500/de/high/master.m3u8"),
+        ("ZDFinfo", "https://zdf-hls-17.akamaized.net/hls/live/2016500/de/high/master.m3u8"),
     ]),
     ("ZDFneo", [
-        ("ZDFneo",                    "https://zdf-hls-16.akamaized.net/hls/live/2016499/de/high/master.m3u8"),
+        ("ZDFneo", "https://zdf-hls-16.akamaized.net/hls/live/2016499/de/high/master.m3u8"),
     ]),
     ("tagesschau24", [
-        ("tagesschau24",              "http://tagesschau-live.ard-mcdn.de/tagesschau/live/hls/de/master.m3u8"),
+        ("tagesschau24", "http://tagesschau-live.ard-mcdn.de/tagesschau/live/hls/de/master.m3u8"),
     ]),
 ]
 
@@ -324,7 +325,7 @@ SOURCES = [
     ("Meine Favoriten", get_favorites, "favorites.png"),
     ("Alle Mediatheken", get_all_highlights, "alle.png"),
     ("Live-Streams", _LIVESTREAMS, "live_streams.png"),
-    ("Live-Events",  None, "live_events.png"),
+    ("Live-Events", None, "live_events.png"),
     ("ARD Mediathek", get_ard_highlights, "ard.png"),
     ("ZDF Mediathek", get_zdf_highlights, "zdf.png"),
     ("Arte", get_arte_highlights, "arte.png"),
@@ -1540,32 +1541,32 @@ class OeMediathekLivestreamScreen(Screen):
     def __init__(self, session, streams=None, title=None):
         self.skin = self._make_skin()
         Screen.__init__(self, session)
-        self.session  = session
+        self.session = session
         self._streams = streams  # None = Gruppenauswahl, Liste = Streamauswahl
         self.last_index = -1
 
         if streams is None:
-            items        = [_b(g[0]) for g in LIVE_STREAM_GROUPS]
-            status_text  = str(len(LIVE_STREAM_GROUPS)) + " Sender"
-            title_text   = "Live-Streams"
+            items = [_b(g[0]) for g in LIVE_STREAM_GROUPS]
+            status_text = str(len(LIVE_STREAM_GROUPS)) + " Sender"
+            title_text = "Live-Streams"
         else:
-            items        = [_b(name) for name, _ in streams]
-            status_text  = str(len(streams)) + (" Stream" if len(streams) == 1 else " Streams")
-            title_text   = title or "Live-Streams"
+            items = [_b(name) for name, _ in streams]
+            status_text = str(len(streams)) + (" Stream" if len(streams) == 1 else " Streams")
+            title_text = title or "Live-Streams"
 
-        self["title_label"]      = Label(_b(title_text))
-        self["status_label"]     = Label(_b(status_text))
-        self["menu_list"]        = MenuList(items)
+        self["title_label"] = Label(_b(title_text))
+        self["status_label"] = Label(_b(status_text))
+        self["menu_list"] = MenuList(items)
         self["description_text"] = Label(_b(""))
-        self["hint_red"]         = Label(_b("Zurück"))
-        self["hint_page"]        = Label(_b(""))
+        self["hint_red"] = Label(_b("Zurück"))
+        self["hint_page"] = Label(_b(""))
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions"],
             {
-                "ok":     self.key_ok,
+                "ok": self.key_ok,
                 "cancel": self.key_cancel,
-                "red":    self.key_cancel,
+                "red": self.key_cancel,
             },
             -1,
         )
@@ -1667,23 +1668,23 @@ class OeMediathekLiveScreen(Screen):
         Screen.__init__(self, session)
         self.session = session
         self._streams = streams  # None = Gruppenauswahl, Liste = Streamauswahl
-        self._status  = {}       # idx -> HTTP-Code oder "checking"
-        self._closed  = False
+        self._status = {}       # idx -> HTTP-Code oder "checking"
+        self._closed = False
 
         if streams is None:
-            items   = [g[0] for g in LIVE_EVENT_GROUPS]
+            items = [g[0] for g in LIVE_EVENT_GROUPS]
             hint_ok = "OK = Öffnen"
-            label   = "Live-Events"
+            label = "Live-Events"
         else:
-            items   = [name for name, _ in streams]
+            items = [name for name, _ in streams]
             hint_ok = "OK = Abspielen"
-            label   = title or "Live-Events"
+            label = title or "Live-Events"
 
         self["title_label"] = Label(_b(label))
-        self["hint_ok"]     = Label(_b(hint_ok))
-        self["hint_exit"]   = Label(_b("EXIT = Zurück"))
-        self["info_text"]   = Label(_b(""))
-        self["menu_list"]   = MenuList([_b(i) for i in items])
+        self["hint_ok"] = Label(_b(hint_ok))
+        self["hint_exit"] = Label(_b("EXIT = Zurück"))
+        self["info_text"] = Label(_b(""))
+        self["menu_list"] = MenuList([_b(i) for i in items])
 
         self["actions"] = ActionMap(
             ["OkCancelActions"],
