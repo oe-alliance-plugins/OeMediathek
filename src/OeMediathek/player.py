@@ -44,29 +44,38 @@ class OeStreamPlayer(MoviePlayer):
 
 _ORF_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-_TMP_DIR      = "/tmp/OeMediathek"
+_TMP_DIR = "/tmp/OeMediathek"
 _TMP_PLAYLIST = _TMP_DIR + "/live.m3u8"
 
 
 def _has_serviceapp():
     return os.path.exists("/usr/lib/enigma2/python/Plugins/SystemPlugins/ServiceApp")
 
+
 def _configure_serviceapp_for_live():
     """Setzt serviceapp-Einstellungen fuer synchrone HLS-Live-Streams (einmalig)."""
     try:
         from Components.config import config
         key = "serviceexteplayer3"
-        opts  = config.plugins.serviceapp.options[key]
-        ext3  = config.plugins.serviceapp.exteplayer3[key]
+        opts = config.plugins.serviceapp.options[key]
+        ext3 = config.plugins.serviceapp.exteplayer3[key]
         changed = False
         if not opts.hls_explorer.value:
-            opts.hls_explorer.value = True;   opts.hls_explorer.save();   changed = True
+            opts.hls_explorer.value = True
+            opts.hls_explorer.save()
+            changed = True
         if opts.autoselect_stream.value:
-            opts.autoselect_stream.value = False; opts.autoselect_stream.save(); changed = True
+            opts.autoselect_stream.value = False
+            opts.autoselect_stream.save()
+            changed = True
         if not ext3.aac_swdecoding.value:
-            ext3.aac_swdecoding.value = True; ext3.aac_swdecoding.save(); changed = True
+            ext3.aac_swdecoding.value = True
+            ext3.aac_swdecoding.save()
+            changed = True
         if not ext3.downmix.value:
-            ext3.downmix.value = True;        ext3.downmix.save();        changed = True
+            ext3.downmix.value = True
+            ext3.downmix.save()
+            changed = True
         return changed
     except Exception:
         return False
@@ -87,23 +96,23 @@ def _build_single_quality_playlist(master_url):
         lines = content.splitlines()
 
         # Beste Variante (hoechste Bandbreite) finden
-        best_bw        = -1
+        best_bw = -1
         best_stream_inf = None
-        best_variant    = None
+        best_variant = None
 
         i = 0
         while i < len(lines):
             line = lines[i]
             if line.startswith('#EXT-X-STREAM-INF'):
-                m  = re.search(r'BANDWIDTH=(\d+)', line)
+                m = re.search(r'BANDWIDTH=(\d+)', line)
                 bw = int(m.group(1)) if m else 0
                 for j in range(i + 1, len(lines)):
                     v = lines[j].strip()
                     if v and not v.startswith('#'):
                         if bw > best_bw:
-                            best_bw         = bw
+                            best_bw = bw
                             best_stream_inf = line
-                            best_variant    = _urljoin(master_url, v)
+                            best_variant = _urljoin(master_url, v)
                         break
             i += 1
 
@@ -140,7 +149,6 @@ def _build_single_quality_playlist(master_url):
     return master_url
 
 
-
 def play_stream(session, stream_url, title="ÖR Mediathek", force_player_id=None, is_live=False, autoconfigure_serviceapp=True):
     """
     Spielt eine URL im eigenen, angepassten Enigma2-Player ab.
@@ -162,7 +170,6 @@ def play_stream(session, stream_url, title="ÖR Mediathek", force_player_id=None
 
     if is_live:
         stream_url_str = _build_single_quality_playlist(stream_url_str)
-
 
     stream_url_bytes = stream_url_str
     title_bytes = title.decode("utf-8", "replace") if isinstance(title, bytes) else str(title)

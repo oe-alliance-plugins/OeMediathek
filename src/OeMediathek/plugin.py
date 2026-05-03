@@ -1716,10 +1716,10 @@ class OeMediathekLiveScreen(Screen):
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"],
             {
-                "ok":     self.key_ok,
+                "ok": self.key_ok,
                 "cancel": self.key_cancel,
-                "up":     self.key_up,
-                "down":   self.key_down,
+                "up": self.key_up,
+                "down": self.key_down,
             },
             -1,
         )
