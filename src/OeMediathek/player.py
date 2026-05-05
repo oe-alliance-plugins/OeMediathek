@@ -84,15 +84,23 @@ def _configure_serviceapp_for_live():
             # v181+: exteplayer3's ffmpeg parst Master-Playlist inkl. EXT-X-MEDIA selbst.
             # HLS-Explorer deaktivieren damit serviceapp die URL unveraendert durchreicht.
             if opts.hls_explorer.value:
-                opts.hls_explorer.value = False; opts.hls_explorer.save(); changed = True
+                opts.hls_explorer.value = False
+                opts.hls_explorer.save()
+                changed = True
         else:
             # Alte exteplayer3: HLS-Explorer an, autoselect aus (kein ABR-Stutter), AAC SW-Decode an.
             if not opts.hls_explorer.value:
-                opts.hls_explorer.value = True;  opts.hls_explorer.save(); changed = True
+                opts.hls_explorer.value = True
+                opts.hls_explorer.save()
+                changed = True
             if opts.autoselect_stream.value:
-                opts.autoselect_stream.value = False; opts.autoselect_stream.save(); changed = True
+                opts.autoselect_stream.value = False
+                opts.autoselect_stream.save()
+                changed = True
             if not ext3.aac_swdecoding.value:
-                ext3.aac_swdecoding.value = True; ext3.aac_swdecoding.save(); changed = True
+                ext3.aac_swdecoding.value = True
+                ext3.aac_swdecoding.save()
+                changed = True
 
         # Bei v181 aac_swdecoding=False erzwingen: altes serviceapp.so wuerde sonst
         # '-a' ohne Wert generieren (Boolean-Flag statt 0|1|2|3) -> exteplayer3 v181 haengt.
@@ -134,6 +142,7 @@ def _serve_playlist_via_http(content):
                 self.send_header('Content-Type', 'application/vnd.apple.mpegurl')
                 self.end_headers()
                 self.wfile.write(data)
+
             def log_message(self, *args):
                 pass
 
