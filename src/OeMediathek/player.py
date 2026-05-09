@@ -143,6 +143,7 @@ def _serve_playlist_via_http(content):
                 self.send_header('Content-Type', 'application/vnd.apple.mpegurl')
                 self.end_headers()
                 self.wfile.write(data)
+
             def log_message(self, *args):
                 pass
 
