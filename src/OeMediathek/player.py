@@ -3,6 +3,7 @@
 # Startet einen Stream im angepassten Enigma2-Mediaplayer
 
 import os
+import io
 import re
 
 try:
@@ -84,15 +85,23 @@ def _configure_serviceapp_for_live():
             # v181+: exteplayer3's ffmpeg parst Master-Playlist inkl. EXT-X-MEDIA selbst.
             # HLS-Explorer deaktivieren damit serviceapp die URL unveraendert durchreicht.
             if opts.hls_explorer.value:
-                opts.hls_explorer.value = False; opts.hls_explorer.save(); changed = True
+                opts.hls_explorer.value = False
+                opts.hls_explorer.save()
+                changed = True
         else:
             # Alte exteplayer3: HLS-Explorer an, autoselect aus (kein ABR-Stutter), AAC SW-Decode an.
             if not opts.hls_explorer.value:
-                opts.hls_explorer.value = True;  opts.hls_explorer.save(); changed = True
+                opts.hls_explorer.value = True
+                opts.hls_explorer.save()
+                changed = True
             if opts.autoselect_stream.value:
-                opts.autoselect_stream.value = False; opts.autoselect_stream.save(); changed = True
+                opts.autoselect_stream.value = False
+                opts.autoselect_stream.save()
+                changed = True
             if not ext3.aac_swdecoding.value:
-                ext3.aac_swdecoding.value = True; ext3.aac_swdecoding.save(); changed = True
+                ext3.aac_swdecoding.value = True
+                ext3.aac_swdecoding.save()
+                changed = True
 
         # Bei v181 aac_swdecoding=False erzwingen: altes serviceapp.so wuerde sonst
         # '-a' ohne Wert generieren (Boolean-Flag statt 0|1|2|3) -> exteplayer3 v181 haengt.
@@ -215,7 +224,7 @@ def _build_single_quality_playlist(master_url):
         else:
             if not os.path.isdir(_TMP_DIR):
                 os.makedirs(_TMP_DIR)
-            with open(_TMP_PLAYLIST, 'w') as f:
+            with io.open(_TMP_PLAYLIST, "w", encoding="utf-8") as f:
                 f.write(playlist)
             return 'file://' + _TMP_PLAYLIST
 

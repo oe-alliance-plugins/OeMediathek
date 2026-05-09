@@ -176,9 +176,16 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
 # --------------------------------------------------------------------------
 
 
+def _to_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return str(value)
+
+
 def _sanitize(text):
-    if isinstance(text, bytes):
-        text = text.decode("utf-8", "replace")
+    text = _to_text(text)
     text = text.replace(u"\xe4", "ae").replace(u"\xf6", "oe").replace(u"\xfc", "ue")
     text = text.replace(u"\xdf", "ss")
     text = text.replace(u"\xc4", "Ae").replace(u"\xd6", "Oe").replace(u"\xdc", "Ue")
@@ -241,11 +248,11 @@ class Downloader(object):
     CHUNK_SIZE = 256 * 1024
 
     def __init__(self, url, title, topic=None, description=None, duration=None, on_progress=None, on_done=None, on_error=None):
-        self.url = url
-        self.title = title
-        self.description = description
-        self.duration = duration
-        self.topic = topic
+        self.url = _to_text(url)
+        self.title = _to_text(title)
+        self.description = _to_text(description)
+        self.duration = _to_text(duration)
+        self.topic = _to_text(topic)
         self.on_progress = on_progress
         self.on_done = on_done
         self.on_error = on_error
