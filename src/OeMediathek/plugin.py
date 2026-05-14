@@ -2230,8 +2230,9 @@ class OeMediathekScreen(Screen):
                             gname_str = str(gname)
                         import time as _time
                         _now = _time.time()
-                        past_ts   = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) <= _now]
-                        future_ts = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) >  _now]
+                        past_ts = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) <= _now]
+                        future_ts = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) > _now]
+
                         def _fmt_ts(ts):
                             t = _time.localtime(ts)
                             return "%02d.%02d.%02d" % (t.tm_mday, t.tm_mon, t.tm_year % 100)
@@ -3213,7 +3214,6 @@ class OeMediathekScreen(Screen):
             pass
         self["hint_info"].setText(_b("INFO/EPG = Markieren"))
 
-
     def _update_ep_sort_hint(self):
         if self.mode != MODE_EPISODES:
             return
@@ -3232,7 +3232,6 @@ class OeMediathekScreen(Screen):
         self["menu_list"].setList([])
         self["description_text"].setText(_b(""))
         self._start_episode_fetch(self.cur_group_idx - self._sv_sn_offset(), reset_sort=False)
-
 
     def _update_blue_hint(self):
         if self.mode == MODE_EPISODES:
