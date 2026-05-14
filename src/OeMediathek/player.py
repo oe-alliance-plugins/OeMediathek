@@ -5,6 +5,8 @@
 import os
 import io
 import re
+import threading
+import time
 
 try:
     from urllib2 import urlopen, Request as _Request
@@ -51,6 +53,58 @@ _ORF_USER_AGENT = (
 
 _TMP_DIR = "/tmp/OeMediathek"
 _TMP_PLAYLIST = _TMP_DIR + "/live.m3u8"
+LOG_FILE = _TMP_DIR + "/oemediathek.log"
+
+
+def _decode_bytes(data):
+    if data is None:
+        return ""
+    if not isinstance(data, bytes):
+        return str(data)
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+        except Exception:
+            pass
+    return data.decode("utf-8", "replace")
+
+
+def _to_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return _decode_bytes(value)
+    return str(value)
+
+
+def _playable_url(url):
+    url = _to_text(url).strip()
+    if not url:
+        return ""
+    if url.lower() in ("offline", "null", "none", "false", "n/a", "-", ""):
+        return ""
+    if not url.startswith(("http://", "https://", "rtmp://", "rtsp://", "file://")):
+        return ""
+    return url
+
+
+def _short_url(url, max_len=180):
+    url = _to_text(url).strip()
+    if len(url) > max_len:
+        return url[:max_len] + "..."
+    return url
+
+
+def _log(message):
+    try:
+        if not os.path.isdir(_TMP_DIR):
+            os.makedirs(_TMP_DIR)
+        with io.open(LOG_FILE, "a", encoding="utf-8") as handle:
+            handle.write("[OeMediathek/player] " + _to_text(message) + "\n")
+    except Exception:
+        pass
 
 
 def _has_serviceapp():
@@ -127,35 +181,56 @@ def _configure_serviceapp_for_live():
 
 
 def _serve_playlist_via_http(content):
-    """Startet einen einmaligen localhost-HTTP-Server und gibt die URL zurueck."""
+    """Serve an in-memory HLS playlist for a short playback startup window."""
     try:
-        import threading
         try:
             from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
         except ImportError:
             from http.server import HTTPServer, BaseHTTPRequestHandler
 
-        data = content.encode('utf-8') if isinstance(content, str) else content
+        data = content.encode("utf-8") if isinstance(content, str) else content
 
         class _Handler(BaseHTTPRequestHandler):
-            def do_GET(self):
+            def _send_headers(self):
                 self.send_response(200)
-                self.send_header('Content-Type', 'application/vnd.apple.mpegurl')
+                self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
+
+            def do_HEAD(self):
+                self._send_headers()
+
+            def do_GET(self):
+                self._send_headers()
                 self.wfile.write(data)
 
             def log_message(self, *args):
                 pass
 
-        server = HTTPServer(('127.0.0.1', 0), _Handler)
+        server = HTTPServer(("127.0.0.1", 0), _Handler)
+        server.timeout = 0.5
         port = server.server_address[1]
 
-        t = threading.Thread(target=lambda: (server.handle_request(), server.server_close()))
-        t.daemon = True
-        t.start()
+        def _serve():
+            deadline = time.time() + 120
+            try:
+                while time.time() < deadline:
+                    server.handle_request()
+            except Exception as e:
+                _log("playlist server error: " + _to_text(e))
+            try:
+                server.server_close()
+            except Exception:
+                pass
 
-        return 'http://127.0.0.1:%d/live.m3u8' % port
-    except Exception:
+        thread = threading.Thread(target=_serve)
+        thread.daemon = True
+        thread.start()
+
+        return "http://127.0.0.1:%d/live.m3u8" % port
+    except Exception as e:
+        _log("playlist server setup failed: " + _to_text(e))
         return None
 
 
@@ -170,9 +245,9 @@ def _build_single_quality_playlist(master_url):
     """
     try:
         req = _Request(master_url)
-        req.add_header('User-Agent', 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36')
+        req.add_header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
         resp = urlopen(req, timeout=4)
-        content = resp.read().decode('utf-8', 'replace')
+        content = _decode_bytes(resp.read())
         lines = content.splitlines()
 
         # Beste Variante (hoechste Bandbreite) finden
@@ -199,7 +274,7 @@ def _build_single_quality_playlist(master_url):
         if not best_variant:
             return master_url
 
-        out = ['#EXTM3U', '#EXT-X-VERSION:4', '#EXT-X-INDEPENDENT-SEGMENTS', '']
+        out = ["#EXTM3U", "#EXT-X-VERSION:4", "#EXT-X-INDEPENDENT-SEGMENTS", ""]
 
         for line in lines:
             if line.startswith('#EXT-X-MEDIA'):
@@ -215,7 +290,7 @@ def _build_single_quality_playlist(master_url):
         out.append(best_variant)
         out.append('')
 
-        playlist = '\n'.join(out)
+        playlist = "\n".join(out)
 
         if _has_new_exteplayer3():
             # v181: file:// funktioniert nicht, stattdessen localhost HTTP
@@ -227,11 +302,38 @@ def _build_single_quality_playlist(master_url):
                 os.makedirs(_TMP_DIR)
             with io.open(_TMP_PLAYLIST, "w", encoding="utf-8") as f:
                 f.write(playlist)
-            return 'file://' + _TMP_PLAYLIST
+            return "file://" + _TMP_PLAYLIST
 
     except Exception:
         pass
     return master_url
+
+
+def _open_player(session, ref):
+    # Prefer the stock MoviePlayer. Some images accept session.open() but do not
+    # actually start playback with custom MoviePlayer subclasses.
+    try:
+        _log("opening MoviePlayer")
+        session.open(MoviePlayer, ref)
+        return True
+    except Exception as e:
+        _log("MoviePlayer open failed: " + _to_text(e))
+
+    try:
+        _log("opening OeStreamPlayer fallback")
+        session.open(OeStreamPlayer, ref)
+        return True
+    except Exception as e:
+        _log("OeStreamPlayer open failed: " + _to_text(e))
+
+    try:
+        _log("starting nav.playService fallback")
+        session.nav.playService(ref)
+        return True
+    except Exception as e:
+        _log("nav.playService failed: " + _to_text(e))
+
+    return False
 
 
 def play_stream(
@@ -246,39 +348,46 @@ def play_stream(
     und, falls autoconfigure_serviceapp=True, serviceapp fuer synchrone Wiedergabe konfiguriert.
     force_player_id erzwingt einen bestimmten Service-Typ.
     """
+    stream_url_str = _playable_url(stream_url)
+    title_text = _to_text(title) or "ÖR Mediathek"
 
-    if isinstance(stream_url, bytes):
-        stream_url_str = stream_url.decode("utf-8", "replace")
-    else:
-        stream_url_str = str(stream_url)
+    if not stream_url_str:
+        _log("empty or invalid stream URL for title: " + title_text)
+        return False
 
-#    if "ard-mcdn.de" in stream_url_str:
-#        stream_url_str = stream_url_str.replace("https://", "http://", 1)
+    try:
+        is_orf = "apasfiis.sf.apa.at" in stream_url_str
+        if (
+            not is_live
+            and "ard-mcdn.de" in stream_url_str
+            and "-progressive." not in stream_url_str
+            and stream_url_str.split("?")[0].endswith(".m3u8")
+        ):
+            is_live = True
+            stream_url_str = re.sub(r"master\w+\.m3u8", "master.m3u8", stream_url_str)
 
-    is_orf = "apasfiis.sf.apa.at" in stream_url_str
-    is_ard_mp4 = "ard-mcdn.de" in stream_url_str and stream_url_str.split("?")[0].endswith(".mp4")
-    if not is_live and "ard-mcdn.de" in stream_url_str and "-progressive." not in stream_url_str and stream_url_str.split("?")[0].endswith(".m3u8"):
-        is_live = True
-        stream_url_str = re.sub(r'master\w+\.m3u8', 'master.m3u8', stream_url_str)
+        if is_orf and "#" not in stream_url_str:
+            stream_url_str = stream_url_str + "#User-Agent=" + _ORF_USER_AGENT
 
-    if is_orf and "#" not in stream_url_str:
-        stream_url_str = stream_url_str + "#User-Agent=" + _ORF_USER_AGENT
+        if is_live:
+            stream_url_str = _build_single_quality_playlist(stream_url_str)
 
-    if is_live:
-        stream_url_str = _build_single_quality_playlist(stream_url_str)
+        if force_player_id is not None:
+            player_id = force_player_id
+        elif (is_live or is_orf) and _has_serviceapp():
+            if is_live and autoconfigure_serviceapp:
+                _configure_serviceapp_for_live()
+            player_id = 5002
+        else:
+            player_id = 4097
 
-    stream_url_bytes = stream_url_str
-    title_bytes = title.decode("utf-8", "replace") if isinstance(title, bytes) else str(title)
+        _log("play_stream title=%s player_id=%s url=%s" % (title_text, str(player_id), _short_url(stream_url_str)))
+        ref = eServiceReference(player_id, 0, stream_url_str)
+        ref.setName(title_text)
+        started = _open_player(session, ref)
+        _log("play_stream started=" + _to_text(started))
+        return started
+    except Exception as e:
+        _log("play_stream failed: " + _to_text(e))
 
-    if force_player_id is not None:
-        player_id = force_player_id
-    elif (is_live or is_orf or is_ard_mp4) and _has_serviceapp():
-        if is_live and autoconfigure_serviceapp:
-            _configure_serviceapp_for_live()
-        player_id = 5002
-    else:
-        player_id = 4097
-
-    ref = eServiceReference(player_id, 0, stream_url_bytes)
-    ref.setName(title_bytes)
-    session.open(OeStreamPlayer, ref)
+    return False

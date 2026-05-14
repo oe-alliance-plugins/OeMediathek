@@ -44,16 +44,64 @@ _FILM_TOPICS = {
 }
 
 
+def _decode_bytes(data):
+    """Decode API bytes robustly. MVW has sent Latin-1/CP1252 JSON despite UTF-8 headers."""
+    if data is None:
+        return ""
+    if not isinstance(data, bytes):
+        return str(data)
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+        except Exception:
+            pass
+    return data.decode("utf-8", "replace")
+
+
+def _repair_mojibake(text):
+    """Repair common UTF-8-as-Latin-1 mojibake such as 'MÃ¼nchen'."""
+    if not text:
+        return ""
+    markers = ("Ã", "Â", "â€", "â€™", "â€œ", "â€ž", "â€“", "â€”")
+    if not any(m in text for m in markers):
+        return text
+    fixed = None
+    for enc in ("latin-1", "cp1252"):
+        try:
+            fixed = text.encode(enc).decode("utf-8")
+            break
+        except Exception:
+            pass
+    if fixed is None:
+        return text
+    old_hits = sum(text.count(m) for m in markers)
+    new_hits = sum(fixed.count(m) for m in markers)
+    if new_hits < old_hits and "�" not in fixed:
+        return fixed
+    return text
+
+
 def _s(val):
     """Gibt val als nativen Text-String zurück (Python 3 / Enigma2)."""
     if val is None:
         return ""
     if isinstance(val, bytes):
-        try:
-            return val.decode('utf-8', 'replace')
-        except Exception:
-            return val.decode('latin-1', 'replace')
-    return str(val)
+        return _decode_bytes(val)
+    return _repair_mojibake(str(val))
+
+
+def _valid_stream_url(url):
+    """Return a playable URL or an empty string for API placeholders such as 'Offline'."""
+    url = _s(url).strip()
+    if not url:
+        return ""
+    if url.lower() in ("offline", "null", "none", "false", "n/a", "-", ""):
+        return ""
+    if not url.startswith(("http://", "https://", "rtmp://", "rtsp://", "file://")):
+        return ""
+    return url
 
 
 def _log(msg):
@@ -76,7 +124,7 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
     """
     Fragt die MediathekViewWeb-API ab.
     search_fields: Liste der Felder fuer die Suche, Standard ["title", "topic"]
-    sort_by: "timestamp" | "duration" (API-seitig); "az" wird clientseitig behandelt
+    sort_by: "timestamp" | "duration" | "topic" (alle API-seitig)
     """
     url = "https://mediathekviewweb.de/api/query"
 
@@ -88,13 +136,18 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
         fields = search_fields if search_fields else ["title", "topic"]
         queries.append({"fields": fields, "query": search_term})
 
-    api_sort = sort_by if sort_by in ("timestamp", "duration") else "timestamp"
+    if sort_by in ("topic", "title"):
+        api_sort, sort_order = sort_by, "asc"
+    elif sort_by in ("timestamp", "duration"):
+        api_sort, sort_order = sort_by, "desc"
+    else:
+        api_sort, sort_order = "timestamp", "desc"
 
     body_dict = {
         "queries": queries,
         "sortBy": api_sort,
-        "sortOrder": "desc",
-        "future": True,
+        "sortOrder": sort_order,
+        "future": False,
         "offset": offset,
         "size": size,
     }
@@ -114,8 +167,7 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
         resp = urlopen(req, timeout=15, context=_ssl_context) if _ssl_context else urlopen(req, timeout=15)
         _log("MVW HTTP %s" % resp.getcode())
         payload = resp.read()
-        if isinstance(payload, bytes):
-            payload = payload.decode("utf-8", "replace")
+        payload = _decode_bytes(payload).lstrip("﻿")
         data = json.loads(payload)
     except Exception as e:
         _log("MVW Fehler: " + str(e))
@@ -138,9 +190,9 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
 
     items = []
     for entry in results_raw:
-        ch = entry.get("channel", "")
-        topic = entry.get("topic", "")
-        title = entry.get("title", "")
+        ch = _s(entry.get("channel", ""))
+        topic = _s(entry.get("topic", ""))
+        title = _s(entry.get("title", ""))
         timestamp = entry.get("timestamp", 0)
 
         if ch in blocked:
@@ -152,10 +204,10 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
             continue
 
         # HD und SD getrennt auslesen
-        url_hd = entry.get("url_video_hd") or ""
-        url_sd = entry.get("url_video") or ""
+        url_hd = _valid_stream_url(entry.get("url_video_hd") or "")
+        url_sd = _valid_stream_url(entry.get("url_video") or "")
 
-        desc = entry.get("description", "")
+        desc = _s(entry.get("description", ""))
         duration = entry.get("duration", 0)
 
         # API kuerzt Beschreibungen mit "\n....." — nur das API-Artefakt entfernen,
@@ -166,7 +218,7 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
             while desc.endswith("\n.") or desc.endswith("\n..") or desc.endswith("\n...") \
                     or desc.endswith("\n....") or desc.endswith("\n....."):
                 desc = desc.rsplit("\n", 1)[0].rstrip()
-            if len(entry.get("description", "")) >= 400:
+            if len(_s(entry.get("description", ""))) >= 400:
                 desc = desc + " ..."
 
         # Überspringen, wenn gar kein Stream vorhanden ist

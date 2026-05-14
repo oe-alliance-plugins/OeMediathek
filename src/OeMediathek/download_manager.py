@@ -78,7 +78,7 @@ class OeMediathekDownloadManagerScreen(Screen):
         self["queue_label"] = Label(_b(""))
         self["hint_yellow"] = Label(_b("Alles abbrechen"))
         self["hint_red"] = Label(_b("Aktuellen abbrechen"))
-        self["hint_exit"] = Label(_b("EXIT = Schliessen"))
+        self["hint_exit"] = Label(_b("EXIT = Schließen"))
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions"],
