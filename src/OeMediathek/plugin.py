@@ -321,15 +321,15 @@ LIVE_EVENT_GROUPS = [
         ("MDR Event 13", "http://mdr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
     ]),
     ("NDR Event", [
-        ("NDR Event 1",               "https://ndrevent.akamaized.net/hls/live/2020100/ndr/event_1/master.m3u8"),
-        ("NDR Event 2",               "https://ndrevent.akamaized.net/hls/live/2020101/ndr/event_1/master.m3u8"),
-        ("NDR Event 3",               "https://ndrevent.akamaized.net/hls/live/2020102/ndr/event_1/master.m3u8"),
-        ("NDR Event 4",               "https://ndrevent.akamaized.net/hls/live/2020103/ndr/event_1/master.m3u8"),
-        ("NDR Event 5",               "https://ndrevent.akamaized.net/hls/live/2020104/ndr/event_1/master.m3u8"),
-        ("NDR Event 6",               "https://ndrevent.akamaized.net/hls/live/2020105/ndr/event_1/master.m3u8"),
-        ("NDR Event 7",               "https://ndrevent.akamaized.net/hls/live/2020106/ndr/event_1/master.m3u8"),
-        ("NDR Event 8",               "https://ndrevent.akamaized.net/hls/live/2020107/ndr/event_1/master.m3u8"),
-        ("NDR Event 9",               "https://ndrevent.akamaized.net/hls/live/2020108/ndr/event_1/master.m3u8"),
+        ("NDR Event 1", "https://ndrevent.akamaized.net/hls/live/2020100/ndr/event_1/master.m3u8"),
+        ("NDR Event 2", "https://ndrevent.akamaized.net/hls/live/2020101/ndr/event_1/master.m3u8"),
+        ("NDR Event 3", "https://ndrevent.akamaized.net/hls/live/2020102/ndr/event_1/master.m3u8"),
+        ("NDR Event 4", "https://ndrevent.akamaized.net/hls/live/2020103/ndr/event_1/master.m3u8"),
+        ("NDR Event 5", "https://ndrevent.akamaized.net/hls/live/2020104/ndr/event_1/master.m3u8"),
+        ("NDR Event 6", "https://ndrevent.akamaized.net/hls/live/2020105/ndr/event_1/master.m3u8"),
+        ("NDR Event 7", "https://ndrevent.akamaized.net/hls/live/2020106/ndr/event_1/master.m3u8"),
+        ("NDR Event 8", "https://ndrevent.akamaized.net/hls/live/2020107/ndr/event_1/master.m3u8"),
+        ("NDR Event 9", "https://ndrevent.akamaized.net/hls/live/2020108/ndr/event_1/master.m3u8"),
     ]),
     ("MDR Event (weltweit)", [
         ("MDR Event 1 (weltweit)", "https://mdrevent1wwhls.akamaized.net/hls/live/2025205/mdrevent1ww/master.m3u8"),
@@ -1614,7 +1614,9 @@ def _check_stream_status(url, callback):
                 # < 30s → "live", >= 30s → "slate", kein Tag → Fallback 200
                 if code == 200 and ".m3u8" in url:
                     try:
-                        import time as _time, calendar as _cal, datetime as _dt
+                        import time as _time
+                        import calendar as _cal
+                        import datetime as _dt
                         seg_url = None
                         for line in master.splitlines():
                             line = line.strip()
@@ -2079,7 +2081,7 @@ class OeMediathekScreen(Screen):
         self._ep_api_has_more = False  # API hat noch Daten nach letztem Episoden-Fetch
         self._ep_next_api_offset = 0  # Naechster API-Offset fuer Episoden-Paging
         self._sn_mode = False   # True = Demnächst-Filter aktiv
-        self._sv_sn_date_str  = ""
+        self._sv_sn_date_str = ""
 
         self._az_topics_cache = None
 
@@ -2276,7 +2278,7 @@ class OeMediathekScreen(Screen):
 
         if self.sort_mode in ("az", "za"):
             self._has_more = getattr(self, "_fetch_az_has_more", False)
-            self._paged_total    = self._fetch_total
+            self._paged_total = self._fetch_total
             self._paged_has_more = self._has_more
         else:
             self._has_more = getattr(self, "_fetch_last_rc_full", False)
