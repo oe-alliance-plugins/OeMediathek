@@ -113,10 +113,8 @@ class OeMediathekDownloadManagerScreen(Screen):
                 self["active_label"].setText(_b("Kein aktiver Download"))
                 self["progress_label"].setText(_b(""))
             else:
-                title = active.title
-                if isinstance(title, bytes):
-                    title = title.decode("utf-8", "replace")
-                self["active_label"].setText(_b(title))
+                title = _b(active.title)
+                self["active_label"].setText(title)
 
                 # Fortschritt aus dem Downloader lesen (thread-safe: nur lesen)
                 try:
@@ -141,9 +139,7 @@ class OeMediathekDownloadManagerScreen(Screen):
             else:
                 lines = []
                 for i, item in enumerate(queue):
-                    t = item.get("title", b"")
-                    if isinstance(t, bytes):
-                        t = t.decode("utf-8", "replace")
+                    t = _b(item.get("title", ""))
                     lines.append("%d. %s" % (i + 1, t))
                 self["queue_label"].setText(_b("\n".join(lines)))
         except Exception:

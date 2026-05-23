@@ -110,7 +110,7 @@ def _log(msg):
     line = "[OeMediathek] " + str(msg)
     print(line)
     try:
-        with open(LOG_FILE, "a") as f:
+        with io.open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
         pass
@@ -281,6 +281,31 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
 
 
 # ------------------------------------------------------------------
+# Topics-Endpunkt
+# ------------------------------------------------------------------
+def get_topics(channel=None):
+    """
+    Gibt alle Topics (Sendungsnamen) zurueck.
+    Optional gefiltert nach Sender (channel="ARD" etc.).
+    Liefert eine alphabetisch sortierte Liste von Unicode-Strings.
+    """
+    url = "https://mediathekviewweb.de/api/topics"
+    if channel:
+        url += "?channel=" + channel
+    try:
+        req = Request(url)
+        req.add_header("User-Agent", "Mozilla/5.0")
+        resp = urlopen(req, timeout=15, context=_ssl_context) if _ssl_context else urlopen(req, timeout=15)
+        data = json.loads(resp.read())
+        topics = data.get("topics", [])
+        _log("get_topics channel=%s -> %d Topics" % (channel, len(topics)))
+        return topics
+    except Exception as e:
+        _log("get_topics Fehler: " + str(e))
+        return []
+
+
+# ------------------------------------------------------------------
 # Sender-spezifische Funktionen
 # ------------------------------------------------------------------
 def get_ard_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
@@ -407,7 +432,7 @@ def _load_favorites_raw():
 
 
 def save_favorites(favorites_raw):
-    """favorites_raw: Liste von {"group": unicode-str, "channel": unicode-str}"""
+    """favorites_raw: list of {"group": str, "channel": str}."""
     try:
         with io.open(FAVORITES_FILE, "w", encoding="utf-8") as f:
             json.dump(favorites_raw, f, ensure_ascii=False)
@@ -415,14 +440,14 @@ def save_favorites(favorites_raw):
         _log("Favoriten speichern Fehler: " + str(e))
 
 
-def reorder_favorites(group_bytes_list):
-    """Speichert Favoriten in neuer Reihenfolge. group_bytes_list: Liste von group-Bytes."""
+def reorder_favorites(group_values):
+    """Speichert Favoriten in neuer Reihenfolge."""
     favs_raw = _load_favorites_raw()
     name_to_fav = {}
     for f in favs_raw:
         name_to_fav[f.get("group", "")] = f
     reordered = []
-    for gb in group_bytes_list:
+    for gb in group_values:
         try:
             g = gb.decode("utf-8", "replace") if isinstance(gb, bytes) else gb
         except Exception:
@@ -432,14 +457,14 @@ def reorder_favorites(group_bytes_list):
     save_favorites(reordered)
 
 
-def add_favorite(group_bytes, channel_bytes):
+def add_favorite(group_value, channel_value):
     """Fuegt eine Gruppe zu den Favoriten hinzu (Duplikate werden ignoriert)."""
     try:
-        group = group_bytes.decode("utf-8", "replace") if isinstance(group_bytes, bytes) else group_bytes
-        channel = channel_bytes.decode("utf-8", "replace") if isinstance(channel_bytes, bytes) else channel_bytes
+        group = group_value.decode("utf-8", "replace") if isinstance(group_value, bytes) else group_value
+        channel = channel_value.decode("utf-8", "replace") if isinstance(channel_value, bytes) else channel_value
     except Exception:
-        group = str(group_bytes)
-        channel = str(channel_bytes)
+        group = str(group_value)
+        channel = str(channel_value)
 
     favs = _load_favorites_raw()
     for f in favs:
@@ -450,12 +475,12 @@ def add_favorite(group_bytes, channel_bytes):
     _log("Favorit hinzugefuegt: " + group)
 
 
-def remove_favorite(group_bytes):
+def remove_favorite(group_value):
     """Entfernt eine Gruppe aus den Favoriten."""
     try:
-        group = group_bytes.decode("utf-8", "replace") if isinstance(group_bytes, bytes) else group_bytes
+        group = group_value.decode("utf-8", "replace") if isinstance(group_value, bytes) else group_value
     except Exception:
-        group = str(group_bytes)
+        group = str(group_value)
 
     favs = _load_favorites_raw()
     favs = [f for f in favs if f.get("group") != group]
@@ -463,11 +488,11 @@ def remove_favorite(group_bytes):
     _log("Favorit entfernt: " + group)
 
 
-def is_favorite(group_bytes):
+def is_favorite(group_value):
     try:
-        group = group_bytes.decode("utf-8", "replace") if isinstance(group_bytes, bytes) else group_bytes
+        group = group_value.decode("utf-8", "replace") if isinstance(group_value, bytes) else group_value
     except Exception:
-        group = str(group_bytes)
+        group = str(group_value)
     return any(f.get("group") == group for f in _load_favorites_raw())
 
 
@@ -491,19 +516,19 @@ def _save_watched(watched_set):
         _log("Watched speichern Fehler: " + str(e))
 
 
-def is_watched(url_bytes):
+def is_watched(url_value):
     try:
-        url = url_bytes.decode("utf-8", "replace") if isinstance(url_bytes, bytes) else url_bytes
+        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
     except Exception:
-        url = str(url_bytes)
+        url = str(url_value)
     return url in _load_watched()
 
 
-def toggle_watched(url_bytes):
+def toggle_watched(url_value):
     try:
-        url = url_bytes.decode("utf-8", "replace") if isinstance(url_bytes, bytes) else url_bytes
+        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
     except Exception:
-        url = str(url_bytes)
+        url = str(url_value)
     watched = _load_watched()
     if url in watched:
         watched.discard(url)
@@ -544,8 +569,8 @@ def _save_episode_favorites(items):
         _log("Episode-Favoriten speichern Fehler: " + str(e))
 
 
-def _item_to_unicode(item):
-    """Konvertiert alle Bytes-Werte eines Item-Dicts zu Unicode-Strings fuer JSON."""
+def _item_to_text(item):
+    """Convert all bytes values in an item dict to text for JSON."""
     result = {}
     for k, v in item.items():
         if isinstance(v, bytes):
@@ -555,34 +580,18 @@ def _item_to_unicode(item):
     return result
 
 
-def _item_to_bytes(item):
-    """Konvertiert alle String-Werte eines Item-Dicts zurueck zu Bytes fuer Enigma2."""
-    _STR_FIELDS = {"title", "group", "channel", "description", "duration",
-                   "stream_url_hd", "stream_url_sd"}
-    result = {}
-    for k, v in item.items():
-        if k in _STR_FIELDS and isinstance(v, str):
-            try:
-                result[k] = v.encode("utf-8")
-            except Exception:
-                result[k] = v
-        else:
-            result[k] = v
-    return result
-
-
-def is_episode_favorite(url_bytes):
+def is_episode_favorite(url_value):
     try:
-        url = url_bytes.decode("utf-8", "replace") if isinstance(url_bytes, bytes) else url_bytes
+        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
     except Exception:
-        url = str(url_bytes)
+        url = str(url_value)
     return any(e.get("stream_url_hd") == url or e.get("stream_url_sd") == url
                for e in _load_episode_favorites())
 
 
 def add_episode_favorite(item):
-    """item: dict mit Bytes-Werten (wie aus der API)."""
-    item_u = _item_to_unicode(item)
+    """Save one episode favorite as JSON-safe text."""
+    item_u = _item_to_text(item)
     url = item_u.get("stream_url_hd") or item_u.get("stream_url_sd") or ""
     if not url:
         return
@@ -594,11 +603,11 @@ def add_episode_favorite(item):
     _log("Episode-Favorit hinzugefuegt: " + url)
 
 
-def remove_episode_favorite(url_bytes):
+def remove_episode_favorite(url_value):
     try:
-        url = url_bytes.decode("utf-8", "replace") if isinstance(url_bytes, bytes) else url_bytes
+        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
     except Exception:
-        url = str(url_bytes)
+        url = str(url_value)
     favs = _load_episode_favorites()
     favs = [e for e in favs if e.get("stream_url_hd") != url and e.get("stream_url_sd") != url]
     _save_episode_favorites(favs)
@@ -606,8 +615,8 @@ def remove_episode_favorite(url_bytes):
 
 
 def get_episode_favorites():
-    """Gibt alle Episode-Favoriten als Liste von Bytes-Item-Dicts zurueck."""
-    return [_item_to_bytes(e) for e in _load_episode_favorites()]
+    """Return episode favorites as native Python 3 text dicts."""
+    return [_item_to_text(e) for e in _load_episode_favorites()]
 
 
 def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
@@ -658,11 +667,8 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
                 # Vergleich normalisiert: "BR: Schnittgut" gespeichert von "Alle" passt auch
                 # auf group_key "Schnittgut" aus der channel-spezifischen Abfrage.
                 for item in items:
-                    item_group = item.get("group", b"")
-                    try:
-                        item_group_str = item_group.decode("utf-8", "replace")
-                    except Exception:
-                        item_group_str = str(item_group)
+                    item_group = item.get("group", "")
+                    item_group_str = _s(item_group)
                     # Direkte Übereinstimmung
                     if item_group_str == group:
                         matched.append(item)
@@ -672,6 +678,10 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
                     if ": " in group:
                         group_suffix = group.split(": ", 1)[1]
                         if item_group_str == group_suffix:
+                            # group-Feld auf den gespeicherten Namen normalisieren,
+                            # damit is_favorite(gname) in der Favoriten-Ansicht korrekt matcht
+                            item = dict(item)
+                            item["group"] = group
                             matched.append(item)
             except Exception as e:
                 _log("Favorit laden Fehler (%s): %s" % (group, str(e)))
@@ -717,9 +727,7 @@ def load_search_history():
 def save_search_history(term):
     """Fuegt einen Suchbegriff vorne ein, entfernt Duplikate und kuerzt die Liste."""
     try:
-        if isinstance(term, bytes):
-            term = term.decode("utf-8", "replace")
-        term = str(term).strip()
+        term = _s(term).strip()
         if not term:
             return
         history = [e for e in load_search_history() if e != term]

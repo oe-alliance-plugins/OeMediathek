@@ -6,14 +6,11 @@ import os
 import io
 import json
 import threading
-import re
 import subprocess
+import time
 
-# Python 3 first, with Python 2 fallback for older Enigma2 images.
-try:
-    from urllib.request import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
-except ImportError:
-    from urllib2 import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
+from urllib.request import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
+from urllib.parse import urljoin
 
 try:
     import ssl
@@ -35,13 +32,13 @@ class KeepHeadersRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         newreq = HTTPRedirectHandler.redirect_request(self, req, fp, code, msg, headers, newurl)
         if newreq:
-            if hasattr(req, 'headers'):
+            if hasattr(req, "headers"):
                 for key, val in req.headers.items():
-                    if key.lower() not in ['host', 'content-length']:
+                    if key.lower() not in ["host", "content-length"]:
                         newreq.add_header(key, val)
-            if hasattr(req, 'unredirected_hdrs'):
+            if hasattr(req, "unredirected_hdrs"):
                 for key, val in req.unredirected_hdrs.items():
-                    if key.lower() not in ['host', 'content-length']:
+                    if key.lower() not in ["host", "content-length"]:
                         newreq.add_unredirected_header(key, val)
         return newreq
 
@@ -110,6 +107,16 @@ def set_serviceapp_autoconfigure(enabled):
     save_settings(s)
 
 
+def get_debug_logging():
+    return load_settings().get("debug_logging", False)
+
+
+def set_debug_logging(enabled):
+    s = load_settings()
+    s["debug_logging"] = bool(enabled)
+    save_settings(s)
+
+
 def write_info_txt(filepath, title, description=None, duration=None, topic=None):
     """Schreibt eine .txt Datei mit Sendungsinfos neben die Download-Datei."""
     try:
@@ -128,13 +135,50 @@ def write_info_txt(filepath, title, description=None, duration=None, topic=None)
             lines.append(d)
         dur = _dec(duration)
         if dur:
-            lines.append(u"Laufzeit: " + dur)
+            lines.append("Laufzeit: " + dur)
         top = _dec(topic)
         if top and top.lower() != t.lower():
-            lines.append(u"Sendung: " + top)
+            lines.append("Sendung: " + top)
         if lines:
             with io.open(txt_path, "w", encoding="utf-8") as f:
-                f.write(u"\n\n".join(lines))
+                f.write("\n\n".join(lines))
+    except Exception:
+        pass
+
+
+def write_meta(filepath, title, description=None, duration=None):
+    """Schreibt eine Enigma2 .meta Datei neben die Download-Datei (Datum, Titel, Beschreibung)."""
+    try:
+        meta_path = filepath + ".meta"
+
+        def _dec(v):
+            if isinstance(v, bytes):
+                return v.decode("utf-8", "replace")
+            return v or ""
+        display_name = os.path.splitext(os.path.basename(filepath))[0]
+        desc_str = _dec(description)
+        ts = int(time.time())
+        dur_secs = 0
+        dur_str = _dec(duration)
+        if dur_str:
+            parts = dur_str.strip().split(":")
+            try:
+                if len(parts) == 3:
+                    dur_secs = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                elif len(parts) == 2:
+                    dur_secs = int(parts[0]) * 60 + int(parts[1])
+            except (ValueError, IndexError):
+                pass
+        lines = [
+            "",
+            display_name,
+            desc_str,
+            str(ts),
+            "",
+            str(dur_secs) if dur_secs else "",
+        ]
+        with io.open(meta_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
     except Exception:
         pass
 
@@ -155,6 +199,12 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
                 raise Exception("ffmpeg Fehler (Code %d)" % proc.returncode)
             try:
                 os.remove(mp4_path)
+            except Exception:
+                pass
+            try:
+                mp4_meta = mp4_path + ".meta"
+                if os.path.exists(mp4_meta):
+                    os.rename(mp4_meta, ts_path + ".meta")
             except Exception:
                 pass
             if on_done:
@@ -186,15 +236,15 @@ def _to_text(value):
 
 def _sanitize(text):
     text = _to_text(text)
-    text = text.replace(u"\xe4", "ae").replace(u"\xf6", "oe").replace(u"\xfc", "ue")
-    text = text.replace(u"\xdf", "ss")
-    text = text.replace(u"\xc4", "Ae").replace(u"\xd6", "Oe").replace(u"\xdc", "Ue")
-    text = re.sub(r'[^\w\s\-]', '', text)
-    return text.strip()
+    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -_äöüÄÖÜß")
+    return "".join(c for c in text if c in allowed).strip()
 
 
 def _make_filename(title, url, topic=None):
     # m3u8 Playlisten werden als Enigma2-freundliche .ts Datei gespeichert
+    url = _to_text(url)
+    title = _to_text(title)
+    topic = _to_text(topic)
     ext = ".ts" if url.split("?")[0].lower().endswith((".m3u8", ".m3u")) else ".mp4"
     safe_title = _sanitize(title) or "download"
     if topic:
@@ -244,7 +294,7 @@ def format_size(size_bytes):
 # --------------------------------------------------------------------------
 
 
-class Downloader(object):
+class Downloader:
     CHUNK_SIZE = 256 * 1024
 
     def __init__(self, url, title, topic=None, description=None, duration=None, on_progress=None, on_done=None, on_error=None):
@@ -262,7 +312,7 @@ class Downloader(object):
         self._downloaded = 0
         self._total = 0
 
-        save_dir = get_save_dir()
+        save_dir = _to_text(get_save_dir())
         filename = _make_filename(title, url, topic=topic)
         base, ext = os.path.splitext(filename)
         candidate = os.path.join(save_dir, filename)
@@ -302,19 +352,11 @@ class Downloader(object):
                             sub_url = lines[j].strip()
                             break
             if sub_url:
-                try:
-                    from urllib.parse import urljoin
-                except ImportError:
-                    from urlparse import urljoin
                 if not sub_url.startswith("http"):
                     sub_url = urljoin(url, sub_url)
                 return self._download_m3u8(opener, sub_url)
 
         segments = []
-        try:
-            from urllib.parse import urljoin
-        except ImportError:
-            from urlparse import urljoin
 
         for line in lines:
             line = line.strip()
@@ -344,7 +386,7 @@ class Downloader(object):
 
     def _run(self):
         try:
-            save_dir = get_save_dir()
+            save_dir = _to_text(get_save_dir())
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
 
@@ -395,6 +437,7 @@ class Downloader(object):
                     self.on_error("Abgebrochen")
             else:
                 write_info_txt(self.filepath, self.title, self.description, self.duration, self.topic)
+                write_meta(self.filepath, self.title, self.description, self.duration)
                 if self.on_done:
                     self.on_done(self.filepath)
 

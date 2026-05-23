@@ -22,4 +22,4 @@ def _(txt):
 localeInit()
 language.addCallback(localeInit)
 
-__version__ = "1.6.5"
+__version__ = "1.7.3"

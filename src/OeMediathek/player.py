@@ -8,15 +8,8 @@ import re
 import threading
 import time
 
-try:
-    from urllib2 import urlopen, Request as _Request
-except ImportError:
-    from urllib.request import urlopen, Request as _Request
-
-try:
-    from urlparse import urljoin as _urljoin
-except ImportError:
-    from urllib.parse import urljoin as _urljoin
+from urllib.request import urlopen, Request as _Request
+from urllib.parse import urljoin as _urljoin
 
 from enigma import eServiceReference
 
@@ -183,10 +176,7 @@ def _configure_serviceapp_for_live():
 def _serve_playlist_via_http(content):
     """Serve an in-memory HLS playlist for a short playback startup window."""
     try:
-        try:
-            from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
-        except ImportError:
-            from http.server import HTTPServer, BaseHTTPRequestHandler
+        from http.server import HTTPServer, BaseHTTPRequestHandler
 
         data = content.encode("utf-8") if isinstance(content, str) else content
 
