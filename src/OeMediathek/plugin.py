@@ -1631,8 +1631,7 @@ def _check_stream_status(url, callback):
                             req2 = Request(seg_url)
                             req2.add_header("User-Agent", "Mozilla/5.0")
                             seg = urlopen(req2, timeout=5).read().decode("utf-8", "replace")
-                            dates = [l.split(":", 1)[1] for l in seg.splitlines()
-                                     if l.startswith("#EXT-X-PROGRAM-DATE-TIME:")]
+                            dates = [x.split(":", 1)[1] for x in seg.splitlines() if x.startswith("#EXT-X-PROGRAM-DATE-TIME:")]
                             if dates:
                                 raw = dates[-1].replace("Z", "").replace("+00:00", "")[:19]
                                 dt = _dt.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S")
