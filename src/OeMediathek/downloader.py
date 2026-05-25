@@ -20,9 +20,10 @@ except Exception:
 
 SETTINGS_FILE = "/etc/enigma2/oemediathek_settings.json"
 DEFAULT_SAVE_DIR = "/media/hdd/movie/OeMediathek"
-_LOG_FILE        = "/tmp/OeMediathek/oemediathek.log"
+_LOG_FILE = "/tmp/OeMediathek/oemediathek.log"
 
 _ORF_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 
 def _log(msg):
     if not get_debug_logging():
