@@ -1603,12 +1603,14 @@ def _check_stream_status(url, callback):
             req.add_header("User-Agent", "Mozilla/5.0")
             try:
                 resp = urlopen(req, timeout=5)
-                code = resp.getcode()
-                master = resp.read().decode("utf-8", "replace")
                 try:
-                    resp.close()
-                except Exception:
-                    pass
+                    code = resp.getcode()
+                    master = _decode_bytes(resp.read())
+                finally:
+                    try:
+                        resp.close()
+                    except Exception:
+                        pass
                 # HLS Live-Erkennung: Segment-Playlist laden und letzten
                 # EXT-X-PROGRAM-DATE-TIME prüfen.
                 # < 30s → "live", >= 30s → "slate", kein Tag → Fallback 200
@@ -1630,7 +1632,14 @@ def _check_stream_status(url, callback):
                         if seg_url:
                             req2 = Request(seg_url)
                             req2.add_header("User-Agent", "Mozilla/5.0")
-                            seg = urlopen(req2, timeout=5).read().decode("utf-8", "replace")
+                            resp2 = urlopen(req2, timeout=5)
+                            try:
+                                seg = _decode_bytes(resp2.read())
+                            finally:
+                                try:
+                                    resp2.close()
+                                except Exception:
+                                    pass
                             dates = [l.split(":", 1)[1] for l in seg.splitlines()
                                      if l.startswith("#EXT-X-PROGRAM-DATE-TIME:")]
                             if dates:
@@ -3998,7 +4007,7 @@ class OeMediathekSettingsScreen(Screen):
     def _browse(self):
         try:
             cur = get_save_dir()
-            start = cur
+            start = _u(cur)
             while start and start != "/" and not os.path.isdir(start):
                 start = os.path.dirname(start)
             if not start or not os.path.isdir(start):
@@ -4012,6 +4021,7 @@ class OeMediathekSettingsScreen(Screen):
         try:
             result = self._browser._result
             if result:
+                result = _u(result)
                 set_save_dir(result)
         except Exception:
             _log("Settings _dir_browser_closed: " + _fmt_exc())
@@ -4196,14 +4206,15 @@ class OeMediathekDownloadScreen(Screen):
                 self._dl_done = False
                 self._dl_converting = True
                 self["status_label"].setText(_b("Konvertiere zu TS ..."))
-                self["hint_label"].setText(_b("Bitte warten ..."))
-                self["hint_yellow"].setText(_b(""))
+                self["hint_label"].setText(_b("OK / EXIT = Schließen"))
+                self["hint_yellow"].setText(_b("Im Hintergrund"))
                 convert_mp4_to_ts(fp, on_done=self._cb_convert_done, on_error=self._cb_convert_error)
                 self._poll_timer.start(500, False)
             else:
                 fname = os.path.basename(fp)
                 self["status_label"].setText(_b("Fertig: " + fname))
                 self["hint_label"].setText(_b("OK / EXIT = Schließen"))
+                self["hint_yellow"].setText(_b(""))
             return
 
         downloaded = self._dl_downloaded
@@ -4216,7 +4227,10 @@ class OeMediathekDownloadScreen(Screen):
 
     def _to_background(self):
         global _active_downloader
-        if not self._downloader or self._dl_done or self._dl_err is not None or self._dl_converting:
+        if self._dl_converting:
+            self.close()
+            return
+        if not self._downloader or self._dl_done or self._dl_err is not None:
             return
 
         self._downloader.on_done = _bg_download_done

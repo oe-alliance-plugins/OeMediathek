@@ -165,10 +165,15 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
     _log("MVW Abruf channel=%s offset=%d size=%d search=%s" % (channel, offset, size, search_term))
     try:
         resp = urlopen(req, timeout=15, context=_ssl_context) if _ssl_context else urlopen(req, timeout=15)
-        _log("MVW HTTP %s" % resp.getcode())
-        payload = resp.read()
-        payload = _decode_bytes(payload).lstrip("﻿")
-        data = json.loads(payload)
+        try:
+            _log("MVW HTTP %s" % resp.getcode())
+            payload = _decode_bytes(resp.read()).lstrip("﻿")
+            data = json.loads(payload)
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
     except Exception as e:
         _log("MVW Fehler: " + str(e))
         raise
@@ -296,7 +301,13 @@ def get_topics(channel=None):
         req = Request(url)
         req.add_header("User-Agent", "Mozilla/5.0")
         resp = urlopen(req, timeout=15, context=_ssl_context) if _ssl_context else urlopen(req, timeout=15)
-        data = json.loads(resp.read())
+        try:
+            data = json.loads(_decode_bytes(resp.read()).lstrip("﻿"))
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
         topics = data.get("topics", [])
         _log("get_topics channel=%s -> %d Topics" % (channel, len(topics)))
         return topics
@@ -448,10 +459,7 @@ def reorder_favorites(group_values):
         name_to_fav[f.get("group", "")] = f
     reordered = []
     for gb in group_values:
-        try:
-            g = gb.decode("utf-8", "replace") if isinstance(gb, bytes) else gb
-        except Exception:
-            g = str(gb)
+        g = _s(gb)
         if g in name_to_fav:
             reordered.append(name_to_fav[g])
     save_favorites(reordered)
@@ -459,12 +467,8 @@ def reorder_favorites(group_values):
 
 def add_favorite(group_value, channel_value):
     """Fuegt eine Gruppe zu den Favoriten hinzu (Duplikate werden ignoriert)."""
-    try:
-        group = group_value.decode("utf-8", "replace") if isinstance(group_value, bytes) else group_value
-        channel = channel_value.decode("utf-8", "replace") if isinstance(channel_value, bytes) else channel_value
-    except Exception:
-        group = str(group_value)
-        channel = str(channel_value)
+    group = _s(group_value)
+    channel = _s(channel_value)
 
     favs = _load_favorites_raw()
     for f in favs:
@@ -477,10 +481,7 @@ def add_favorite(group_value, channel_value):
 
 def remove_favorite(group_value):
     """Entfernt eine Gruppe aus den Favoriten."""
-    try:
-        group = group_value.decode("utf-8", "replace") if isinstance(group_value, bytes) else group_value
-    except Exception:
-        group = str(group_value)
+    group = _s(group_value)
 
     favs = _load_favorites_raw()
     favs = [f for f in favs if f.get("group") != group]
@@ -489,10 +490,7 @@ def remove_favorite(group_value):
 
 
 def is_favorite(group_value):
-    try:
-        group = group_value.decode("utf-8", "replace") if isinstance(group_value, bytes) else group_value
-    except Exception:
-        group = str(group_value)
+    group = _s(group_value)
     return any(f.get("group") == group for f in _load_favorites_raw())
 
 
@@ -517,18 +515,12 @@ def _save_watched(watched_set):
 
 
 def is_watched(url_value):
-    try:
-        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
-    except Exception:
-        url = str(url_value)
+    url = _s(url_value)
     return url in _load_watched()
 
 
 def toggle_watched(url_value):
-    try:
-        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
-    except Exception:
-        url = str(url_value)
+    url = _s(url_value)
     watched = _load_watched()
     if url in watched:
         watched.discard(url)
@@ -574,17 +566,14 @@ def _item_to_text(item):
     result = {}
     for k, v in item.items():
         if isinstance(v, bytes):
-            result[k] = v.decode("utf-8", "replace")
+            result[_s(k)] = _s(v)
         else:
-            result[k] = v
+            result[_s(k)] = v
     return result
 
 
 def is_episode_favorite(url_value):
-    try:
-        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
-    except Exception:
-        url = str(url_value)
+    url = _s(url_value)
     return any(e.get("stream_url_hd") == url or e.get("stream_url_sd") == url
                for e in _load_episode_favorites())
 
@@ -604,10 +593,7 @@ def add_episode_favorite(item):
 
 
 def remove_episode_favorite(url_value):
-    try:
-        url = url_value.decode("utf-8", "replace") if isinstance(url_value, bytes) else url_value
-    except Exception:
-        url = str(url_value)
+    url = _s(url_value)
     favs = _load_episode_favorites()
     favs = [e for e in favs if e.get("stream_url_hd") != url and e.get("stream_url_sd") != url]
     _save_episode_favorites(favs)

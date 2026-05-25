@@ -15,11 +15,11 @@ def _(txt):
     if gettext.dgettext(PluginLanguageDomain, txt):
         return gettext.dgettext(PluginLanguageDomain, txt)
     else:
-        print("[" + PluginLanguageDomain + "] fallback to default translation for " + txt)
+        print("[" + PluginLanguageDomain + "] fallback to default translation for " + str(txt))
         return gettext.gettext(txt)
 
 
 localeInit()
 language.addCallback(localeInit)
 
-__version__ = "1.7.3"
+__version__ = "1.7.4"

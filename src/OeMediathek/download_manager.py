@@ -17,11 +17,26 @@ except Exception:
     IS_FHD = True
 
 
+def _decode_bytes(data):
+    if data is None:
+        return ""
+    if not isinstance(data, bytes):
+        return str(data)
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+        except Exception:
+            pass
+    return data.decode("utf-8", "replace")
+
+
 def _b(s):
     if s is None:
         return ""
     if isinstance(s, bytes):
-        return s.decode("utf-8", "replace")
+        return _decode_bytes(s)
     return str(s)
 
 

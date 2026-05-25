@@ -237,7 +237,13 @@ def _build_single_quality_playlist(master_url):
         req = _Request(master_url)
         req.add_header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
         resp = urlopen(req, timeout=4)
-        content = _decode_bytes(resp.read())
+        try:
+            content = _decode_bytes(resp.read())
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
         lines = content.splitlines()
 
         # Beste Variante (hoechste Bandbreite) finden

@@ -20,8 +20,23 @@ except Exception:
 
 SETTINGS_FILE = "/etc/enigma2/oemediathek_settings.json"
 DEFAULT_SAVE_DIR = "/media/hdd/movie/OeMediathek"
+_LOG_FILE        = "/tmp/OeMediathek/oemediathek.log"
 
 _ORF_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+def _log(msg):
+    if not get_debug_logging():
+        return
+    line = "[OeMediathek %s] DL: %s" % (time.strftime("%H:%M:%S", time.localtime()), _to_text(msg))
+    print(line)
+    try:
+        log_dir = os.path.dirname(_LOG_FILE)
+        if not os.path.isdir(log_dir):
+            os.makedirs(log_dir)
+        with io.open(_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
 
 # --------------------------------------------------------------------------
 # Redirect-Handler (Behaelt Tarn-Header bei, blockiert aber falschen Host)
@@ -123,9 +138,7 @@ def write_info_txt(filepath, title, description=None, duration=None, topic=None)
         txt_path = os.path.splitext(filepath)[0] + ".txt"
 
         def _dec(v):
-            if isinstance(v, bytes):
-                return v.decode("utf-8", "replace")
-            return v or ""
+            return _to_text(v)
         lines = []
         t = _dec(title)
         if t:
@@ -152,9 +165,7 @@ def write_meta(filepath, title, description=None, duration=None):
         meta_path = filepath + ".meta"
 
         def _dec(v):
-            if isinstance(v, bytes):
-                return v.decode("utf-8", "replace")
-            return v or ""
+            return _to_text(v)
         display_name = os.path.splitext(os.path.basename(filepath))[0]
         desc_str = _dec(description)
         ts = int(time.time())
@@ -188,6 +199,7 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
     def _run():
         ts_path = os.path.splitext(mp4_path)[0] + ".ts"
         try:
+            _log("ffmpeg Start: %s" % mp4_path)
             cmd = ["ffmpeg", "-y", "-i", mp4_path, "-c", "copy", ts_path]
             proc = subprocess.Popen(
                 cmd,
@@ -207,9 +219,11 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
                     os.rename(mp4_meta, ts_path + ".meta")
             except Exception:
                 pass
+            _log("ffmpeg Fertig: %s" % ts_path)
             if on_done:
                 on_done(ts_path)
         except Exception as e:
+            _log("ffmpeg Fehler: %s — %s" % (mp4_path, str(e)))
             try:
                 if os.path.exists(ts_path):
                     os.remove(ts_path)
@@ -226,11 +240,26 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
 # --------------------------------------------------------------------------
 
 
+def _decode_bytes(data):
+    if data is None:
+        return ""
+    if not isinstance(data, bytes):
+        return str(data)
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+        except Exception:
+            pass
+    return data.decode("utf-8", "replace")
+
+
 def _to_text(value):
     if value is None:
         return ""
     if isinstance(value, bytes):
-        return value.decode("utf-8", "replace")
+        return _decode_bytes(value)
     return str(value)
 
 
@@ -272,9 +301,15 @@ def get_content_length(url):
         opener = build_opener(*handlers)
 
         resp = opener.open(req, timeout=10)
-        length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
-        if length:
-            return int(length)
+        try:
+            length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
+            if length:
+                return int(length)
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
     except Exception:
         pass
     return 0
@@ -340,7 +375,13 @@ class Downloader:
         req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
 
         resp = opener.open(req, timeout=30)
-        manifest = resp.read().decode("utf-8", "ignore")
+        try:
+            manifest = _decode_bytes(resp.read())
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
         lines = manifest.split("\n")
 
         if "#EXT-X-STREAM-INF" in manifest:
@@ -378,7 +419,13 @@ class Downloader:
                 seg_req = Request(seg_url)
                 seg_req.add_header("User-Agent", _ORF_USER_AGENT)
                 seg_resp = opener.open(seg_req, timeout=30)
-                chunk = seg_resp.read()
+                try:
+                    chunk = seg_resp.read()
+                finally:
+                    try:
+                        seg_resp.close()
+                    except Exception:
+                        pass
                 f.write(chunk)
                 self._downloaded += len(chunk)
                 if self.on_progress:
@@ -386,6 +433,7 @@ class Downloader:
 
     def _run(self):
         try:
+            _log("Start: %s" % self.title)
             save_dir = _to_text(get_save_dir())
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
@@ -405,27 +453,32 @@ class Downloader:
                 req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
                 resp = opener.open(req, timeout=30)
-
-                total = 0
                 try:
-                    length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
-                    if length:
-                        total = int(length)
-                except Exception:
-                    pass
+                    total = 0
+                    try:
+                        length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
+                        if length:
+                            total = int(length)
+                    except Exception:
+                        pass
 
-                downloaded = 0
-                with open(self.filepath, "wb") as f:
-                    while not self._cancelled:
-                        chunk = resp.read(self.CHUNK_SIZE)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        self._downloaded = downloaded
-                        self._total = total
-                        if self.on_progress:
-                            self.on_progress(downloaded, total)
+                    downloaded = 0
+                    with open(self.filepath, "wb") as f:
+                        while not self._cancelled:
+                            chunk = resp.read(self.CHUNK_SIZE)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            self._downloaded = downloaded
+                            self._total = total
+                            if self.on_progress:
+                                self.on_progress(downloaded, total)
+                finally:
+                    try:
+                        resp.close()
+                    except Exception:
+                        pass
 
             if self._cancelled:
                 # Abgebrochene Datei loeschen
@@ -433,15 +486,18 @@ class Downloader:
                     os.remove(self.filepath)
                 except Exception:
                     pass
+                _log("Abgebrochen: %s" % self.title)
                 if self.on_error:
                     self.on_error("Abgebrochen")
             else:
                 write_info_txt(self.filepath, self.title, self.description, self.duration, self.topic)
                 write_meta(self.filepath, self.title, self.description, self.duration)
+                _log("Fertig: %s" % self.title)
                 if self.on_done:
                     self.on_done(self.filepath)
 
         except Exception as e:
+            _log("Fehler: %s — %s" % (self.title, str(e)))
             try:
                 if os.path.exists(self.filepath):
                     os.remove(self.filepath)
