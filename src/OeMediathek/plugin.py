@@ -320,11 +320,11 @@ LIVE_EVENT_GROUPS = [
         ("MDR Event 13", "http://mdr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
     ]),
     ("MDR Event (weltweit)", [
-        ("MDR Event 1 (weltweit)",    "https://mdrevent1wwhls.akamaized.net/hls/live/2025205/mdrevent1ww/master.m3u8"),
-        ("MDR Event 2 (weltweit)",    "https://mdrevent2wwhls.akamaized.net/hls/live/2025367/mdrevent2ww/master.m3u8"),
-        ("MDR Event 3 (weltweit)",    "https://mdrevent3wwhls.akamaized.net/hls/live/2025368/mdrevent3ww/master.m3u8"),
-        ("MDR Event 4 (weltweit)",    "https://mdrevent4wwhls.akamaized.net/hls/live/2025369/mdrevent4ww/master.m3u8"),
-        ("MDR Event 5 (weltweit)",    "https://mdrevent5wwhls.akamaized.net/hls/live/2025370/mdrevent5ww/master.m3u8"),
+        ("MDR Event 1 (weltweit)", "https://mdrevent1wwhls.akamaized.net/hls/live/2025205/mdrevent1ww/master.m3u8"),
+        ("MDR Event 2 (weltweit)", "https://mdrevent2wwhls.akamaized.net/hls/live/2025367/mdrevent2ww/master.m3u8"),
+        ("MDR Event 3 (weltweit)", "https://mdrevent3wwhls.akamaized.net/hls/live/2025368/mdrevent3ww/master.m3u8"),
+        ("MDR Event 4 (weltweit)", "https://mdrevent4wwhls.akamaized.net/hls/live/2025369/mdrevent4ww/master.m3u8"),
+        ("MDR Event 5 (weltweit)", "https://mdrevent5wwhls.akamaized.net/hls/live/2025370/mdrevent5ww/master.m3u8"),
     ]),
     ("NDR Event", [
         ("NDR Event 1", "https://ndrevent.akamaized.net/hls/live/2020100/ndr/event_1/master.m3u8"),
@@ -517,9 +517,9 @@ CHANNEL_MAP = {
 
 MODE_GROUPS = 0
 MODE_EPISODES = 1
-_LIST_ROWS     = 13   # OeMediathekScreen + Livestream + Live
-_SH_LIST_ROWS  =  7   # SearchHistoryScreen  (420px/56px FHD, 280px/37px HD)
-_DB_LIST_ROWS  =  9   # DirBrowser           (560px/58px FHD, 373px/38px HD)
+_LIST_ROWS = 13   # OeMediathekScreen + Livestream + Live
+_SH_LIST_ROWS = 7   # SearchHistoryScreen  (420px/56px FHD, 280px/37px HD)
+_DB_LIST_ROWS = 9   # DirBrowser           (560px/58px FHD, 373px/38px HD)
 
 
 class _CustomListMixin(object):
@@ -528,18 +528,18 @@ class _CustomListMixin(object):
     _CL_ROWS = 13
 
     def _cl_init(self):
-        self._list_items  = []
-        self._list_sel    = 0
+        self._list_items = []
+        self._list_sel = 0
         self._list_scroll = 0
         for i in range(self._CL_ROWS):
-            self["list_sel_%d"   % i] = Label(_b(""))
+            self["list_sel_%d" % i] = Label(_b(""))
             self["list_label_%d" % i] = Label(_b(""))
-            self["list_sel_%d"   % i].hide()
+            self["list_sel_%d" % i].hide()
             self["list_label_%d" % i].hide()
 
     def _set_list(self, items):
-        self._list_items  = list(items)
-        self._list_sel    = 0
+        self._list_items = list(items)
+        self._list_sel = 0
         self._list_scroll = 0
         self._render_list()
 
@@ -564,7 +564,7 @@ class _CustomListMixin(object):
         self._render_list()
 
     def _render_list(self):
-        rows  = self._CL_ROWS
+        rows = self._CL_ROWS
         total = len(self._list_items)
         if total == 0:
             self._list_sel = self._list_scroll = 0
@@ -591,15 +591,15 @@ class _CustomListMixin(object):
                 else:
                     self["list_sel_%d" % i].hide()
             else:
-                self["list_sel_%d"   % i].hide()
+                self["list_sel_%d" % i].hide()
                 self["list_label_%d" % i].hide()
 
     def _list_step(self, step):
         total = len(self._list_items)
         if total == 0:
             return
-        rows       = self._CL_ROWS
-        old_sel    = self._list_sel
+        rows = self._CL_ROWS
+        old_sel = self._list_sel
         old_scroll = self._list_scroll
         self._list_sel = (old_sel + step) % total
         if self._list_sel < self._list_scroll:
@@ -625,6 +625,7 @@ class _CustomListMixin(object):
             len(self._list_items) - 1
         ))
         self._list_focus(new_idx)
+
 
 # Sondereinträge am Anfang der Gruppenansicht
 _SV_ENTRY = ">> Sendung verpasst?"
@@ -1583,7 +1584,7 @@ class OeMediathekMainScreen(Screen):
 # ------------------------------------------------------------------
 class OeMediathekSearchHistoryScreen(_CustomListMixin, Screen):
 
-    _CL_ROWS    = _SH_LIST_ROWS
+    _CL_ROWS = _SH_LIST_ROWS
     _NEW_SEARCH = ">> Neue Suche..."
 
     @staticmethod
@@ -1648,17 +1649,17 @@ class OeMediathekSearchHistoryScreen(_CustomListMixin, Screen):
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions", "DirectionActions", "ListboxActions"],
             {
-                "ok":           self.on_ok,
-                "cancel":       self.on_cancel,
-                "red":          self.on_delete,
-                "up":           self.on_up,
-                "down":         self.on_down,
-                "upRepeated":   self.on_up,
+                "ok": self.on_ok,
+                "cancel": self.on_cancel,
+                "red": self.on_delete,
+                "up": self.on_up,
+                "down": self.on_down,
+                "upRepeated": self.on_up,
                 "downRepeated": self.on_down,
-                "left":         self.on_page_up,
-                "right":        self.on_page_down,
-                "pageUp":       self.on_page_up,
-                "pageDown":     self.on_page_down,
+                "left": self.on_page_up,
+                "right": self.on_page_down,
+                "pageUp": self.on_page_up,
+                "pageDown": self.on_page_down,
             },
             1,
         )
@@ -1745,33 +1746,33 @@ class OeMediathekPickerScreen(_CustomListMixin, Screen):
     @staticmethod
     def _build_skin(rows):
         if IS_FHD:
-            px, pw  = 560, 800
-            lx, lw  = 600, 720
-            rh, rf  = 56, 34
-            tf, hf  = 38, 32
-            hint_h  = 104
-            sep_h   = 2
-            ph      = rows * rh + 258
-            py      = max(80, (1080 - ph) // 2)
+            px, pw = 560, 800
+            lx, lw = 600, 720
+            rh, rf = 56, 34
+            tf, hf = 38, 32
+            hint_h = 104
+            sep_h = 2
+            ph = rows * rh + 258
+            py = max(80, (1080 - ph) // 2)
             title_y = py + 30
-            sep_y   = py + 100
+            sep_y = py + 100
             list_y0 = py + 114
-            hint_y  = list_y0 + rows * rh + 10
-            sz      = "1920,1080"
+            hint_y = list_y0 + rows * rh + 10
+            sz = "1920,1080"
         else:
-            px, pw  = 373, 534
-            lx, lw  = 400, 480
-            rh, rf  = 37, 22
-            tf, hf  = 25, 21
-            hint_h  = 70
-            sep_h   = 1
-            ph      = rows * rh + 174
-            py      = max(53, (720 - ph) // 2)
+            px, pw = 373, 534
+            lx, lw = 400, 480
+            rh, rf = 37, 22
+            tf, hf = 25, 21
+            hint_h = 70
+            sep_h = 1
+            ph = rows * rh + 174
+            py = max(53, (720 - ph) // 2)
             title_y = py + 20
-            sep_y   = py + 68
+            sep_y = py + 68
             list_y0 = py + 77
-            hint_y  = list_y0 + rows * rh + 7
-            sz      = "1280,720"
+            hint_y = list_y0 + rows * rh + 7
+            sz = "1280,720"
 
         list_xml = ""
         for i in range(rows):
@@ -1782,7 +1783,7 @@ class OeMediathekPickerScreen(_CustomListMixin, Screen):
                 '<widget name="list_label_{i}" position="{lbx},{y}" size="{lbw},{rh}" '
                 'zPosition="2" font="Regular;{rf}" halign="left" valign="center" '
                 'foregroundColor="#CCCCCC" backgroundColor="#33000000" transparent="1" noWrap="1"/>'
-            ).format(i=i, x=lx, y=y, w=lw, lbx=lx+12, lbw=lw-12, rh=rh, rf=rf)
+            ).format(i=i, x=lx, y=y, w=lw, lbx=lx + 12, lbw=lw - 12, rh=rh, rf=rf)
 
         return (
             '<screen name="OeMediathekPickerScreen" position="0,0" size="{sz}" flags="wfNoBorder">'
@@ -1795,7 +1796,7 @@ class OeMediathekPickerScreen(_CustomListMixin, Screen):
             '<widget name="hint_ok"    position="{lx},{hy}" size="360,{hh}" font="Regular;{hf}" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
             '<widget name="hint_label" position="{px},{hy}" size="{hw},{hh}" font="Regular;{hf}" halign="right" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
             '</screen>'
-        ).format(px=px, hy=hint_y, pw=pw, hh=hint_h, lx=lx, hf=hf, hw=pw-20)
+        ).format(px=px, hy=hint_y, pw=pw, hh=hint_h, lx=lx, hf=hf, hw=pw - 20)
 
     def __init__(self, session, title, choices):
         """choices: list of (label, value). Schließt mit value oder None."""
@@ -1807,24 +1808,24 @@ class OeMediathekPickerScreen(_CustomListMixin, Screen):
         self._choices = choices
 
         self["title_label"] = Label(_b(title))
-        self["hint_ok"]     = Label(_b("OK = Ausw\xc3\xa4hlen"))
-        self["hint_label"]  = Label(_b("EXIT = Abbrechen"))
+        self["hint_ok"] = Label(_b("OK = Ausw\xc3\xa4hlen"))
+        self["hint_label"] = Label(_b("EXIT = Abbrechen"))
 
         self._set_list([c[0] for c in choices])
 
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions", "ListboxActions"],
             {
-                "ok":           self._on_ok,
-                "cancel":       self._on_cancel,
-                "up":           self._on_up,
-                "down":         self._on_down,
-                "upRepeated":   self._on_up,
+                "ok": self._on_ok,
+                "cancel": self._on_cancel,
+                "up": self._on_up,
+                "down": self._on_down,
+                "upRepeated": self._on_up,
                 "downRepeated": self._on_down,
-                "left":         self._on_page_up,
-                "right":        self._on_page_down,
-                "pageUp":       self._on_page_up,
-                "pageDown":     self._on_page_down,
+                "left": self._on_page_up,
+                "right": self._on_page_down,
+                "pageUp": self._on_page_up,
+                "pageDown": self._on_page_down,
             },
             1,
         )
@@ -2009,18 +2010,18 @@ class OeMediathekLivestreamScreen(_CustomListMixin, Screen):
         self.skin = self._make_skin()
         Screen.__init__(self, session)
         self._cl_init()
-        self.session    = session
-        self._streams   = streams
+        self.session = session
+        self._streams = streams
         self.last_index = -1
 
         if streams is None:
-            items       = [g[0] for g in LIVE_STREAM_GROUPS]
+            items = [g[0] for g in LIVE_STREAM_GROUPS]
             status_text = str(len(LIVE_STREAM_GROUPS)) + " Sender"
-            title_text  = "Live-Streams"
+            title_text = "Live-Streams"
         else:
-            items       = [name for name, _ in streams]
+            items = [name for name, _ in streams]
             status_text = str(len(streams)) + (" Stream" if len(streams) == 1 else " Streams")
-            title_text  = title or "Live-Streams"
+            title_text = title or "Live-Streams"
 
         self["title_label"] = Label(_b(title_text))
         self["status_label"] = Label(_b(status_text))
@@ -2033,17 +2034,17 @@ class OeMediathekLivestreamScreen(_CustomListMixin, Screen):
         self["actions"] = ActionMap(
             ["OkCancelActions", "ColorActions", "DirectionActions", "ListboxActions"],
             {
-                "ok":           self.key_ok,
-                "cancel":       self.key_cancel,
-                "red":          self.key_cancel,
-                "up":           self.key_up,
-                "down":         self.key_down,
-                "upRepeated":   self.key_up,
+                "ok": self.key_ok,
+                "cancel": self.key_cancel,
+                "red": self.key_cancel,
+                "up": self.key_up,
+                "down": self.key_down,
+                "upRepeated": self.key_up,
                 "downRepeated": self.key_down,
-                "left":         self.key_page_up,
-                "right":        self.key_page_down,
-                "pageUp":       self.key_page_up,
-                "pageDown":     self.key_page_down,
+                "left": self.key_page_up,
+                "right": self.key_page_down,
+                "pageUp": self.key_page_up,
+                "pageDown": self.key_page_down,
             },
             -1,
         )
@@ -2190,13 +2191,13 @@ class OeMediathekLiveScreen(_CustomListMixin, Screen):
         Screen.__init__(self, session)
         self._cl_init()
         self._cl_init()
-        self.session  = session
+        self.session = session
         self._streams = streams
-        self._status  = {}
+        self._status = {}
         self._closed = False
-        self._pix_green  = None
+        self._pix_green = None
         self._pix_yellow = None
-        self._pix_red    = None
+        self._pix_red = None
 
         for i in range(_LIST_ROWS):
             try:
@@ -2226,16 +2227,16 @@ class OeMediathekLiveScreen(_CustomListMixin, Screen):
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions", "ListboxActions"],
             {
-                "ok":           self.key_ok,
-                "cancel":       self.key_cancel,
-                "up":           self.key_up,
-                "down":         self.key_down,
-                "upRepeated":   self.key_up,
+                "ok": self.key_ok,
+                "cancel": self.key_cancel,
+                "up": self.key_up,
+                "down": self.key_down,
+                "upRepeated": self.key_up,
                 "downRepeated": self.key_down,
-                "left":         self.key_page_up,
-                "right":        self.key_page_down,
-                "pageUp":       self.key_page_up,
-                "pageDown":     self.key_page_down,
+                "left": self.key_page_up,
+                "right": self.key_page_down,
+                "pageUp": self.key_page_up,
+                "pageDown": self.key_page_down,
             },
             -1,
         )
@@ -2246,9 +2247,9 @@ class OeMediathekLiveScreen(_CustomListMixin, Screen):
             try:
                 import os as _os
                 _d = _os.path.dirname(__file__)
-                self._pix_green  = _LoadPixmap(_os.path.join(_d, "live_green.png"))
+                self._pix_green = _LoadPixmap(_os.path.join(_d, "live_green.png"))
                 self._pix_yellow = _LoadPixmap(_os.path.join(_d, "live_yellow.png"))
-                self._pix_red    = _LoadPixmap(_os.path.join(_d, "live_red.png"))
+                self._pix_red = _LoadPixmap(_os.path.join(_d, "live_red.png"))
             except Exception as e:
                 _log("live PNGs load failed: " + str(e))
         self._update_dots()
@@ -2268,7 +2269,7 @@ class OeMediathekLiveScreen(_CustomListMixin, Screen):
                 self["list_dot_%d" % i].hide()
             return
         scroll = self._list_scroll
-        total  = len(self._list_items)
+        total = len(self._list_items)
         for i in range(_LIST_ROWS):
             abs_idx = scroll + i
             if abs_idx >= total:
@@ -2287,7 +2288,6 @@ class OeMediathekLiveScreen(_CustomListMixin, Screen):
                     self["list_dot_%d" % i].hide()
             else:
                 self["list_dot_%d" % i].hide()
-
 
     def _start_check(self, idx, url):
         def on_result(code):
@@ -2531,20 +2531,20 @@ class OeMediathekScreen(Screen):
         self["status_label"] = Label("Lade Inhalte ...")
         self["description_text"] = ScrollLabel(_b(""))
 
-        self._list_items  = []
-        self._list_sel    = 0
+        self._list_items = []
+        self._list_sel = 0
         self._list_scroll = 0
         self._dot_pix = None
         for i in range(_LIST_ROWS):
-            self["list_sel_%d"   % i] = Label(_b(""))
+            self["list_sel_%d" % i] = Label(_b(""))
             self["list_label_%d" % i] = Label(_b(""))
             try:
                 self["list_dot_%d" % i] = _Pixmap() if _Pixmap else Label(_b(""))
             except Exception:
                 self["list_dot_%d" % i] = Label(_b(""))
-            self["list_sel_%d"   % i].hide()
+            self["list_sel_%d" % i].hide()
             self["list_label_%d" % i].hide()
-            self["list_dot_%d"   % i].hide()
+            self["list_dot_%d" % i].hide()
 
         self["sort_label"] = Label("")
         self["hint_red"] = Label("")
@@ -2569,13 +2569,13 @@ class OeMediathekScreen(Screen):
                 "nextBouquet": self.next_page,
                 "prevBouquet": self.prev_page,
                 "up": self.on_up,
-                "upRepeated":   self.on_up,
+                "upRepeated": self.on_up,
                 "down": self.on_down,
                 "downRepeated": self.on_down,
-                "left":         self.on_page_up,
-                "right":        self.on_page_down,
-                "pageUp":       self.on_page_up,
-                "pageDown":     self.on_page_down,
+                "left": self.on_page_up,
+                "right": self.on_page_down,
+                "pageUp": self.on_page_up,
+                "pageDown": self.on_page_down,
             },
             -1,
         )
@@ -2975,25 +2975,25 @@ class OeMediathekScreen(Screen):
             b"Freitag", b"Samstag", b"Sonntag",
         ]
         choices = []
-        now    = _time.localtime()
+        now = _time.localtime()
         # Mitternacht des heutigen Tages als Ankerpunkt — vermeidet Sommerzeit-Fehler
         today_midnight = int(_time.mktime((now.tm_year, now.tm_mon, now.tm_mday, 0, 0, 0, 0, 0, -1)))
         all_items = getattr(self, "all_items", []) or []
         for i in range(8):
-            day_ts   = today_midnight - i * 86400
-            t        = _time.localtime(day_ts)
-            ds       = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
-            dsp      = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
+            day_ts = today_midnight - i * 86400
+            t = _time.localtime(day_ts)
+            ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
+            dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
             start_ts = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
-            end_ts   = start_ts + 86399
-            count    = sum(1 for item in all_items
+            end_ts = start_ts + 86399
+            count = sum(1 for item in all_items
                            if start_ts <= item.get("timestamp", 0) <= end_ts)
             if i == 0:
                 label = _b("Heute (%s) - %d" % (dsp, count))
             elif i == 1:
                 label = _b("Gestern (%s) - %d" % (dsp, count))
             else:
-                wd    = _WEEKDAYS[t.tm_wday]
+                wd = _WEEKDAYS[t.tm_wday]
                 label = wd + _b(" (%s) - %d" % (dsp, count))
             choices.append((label, ds))
         self.session.openWithCallback(
@@ -3039,7 +3039,7 @@ class OeMediathekScreen(Screen):
             y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
             # Mitternacht bis 23:59:59 in der Lokalzeit der Box
             start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
-            end_ts   = start_ts + 86399
+            end_ts = start_ts + 86399
         except Exception:
             self["status_label"].setText(_b("Datum ungueltig!"))
             return
@@ -3064,22 +3064,22 @@ class OeMediathekScreen(Screen):
             b"Freitag", b"Samstag", b"Sonntag",
         ]
         choices = []
-        now    = _time.localtime()
+        now = _time.localtime()
         today_midnight = int(_time.mktime((now.tm_year, now.tm_mon, now.tm_mday, 0, 0, 0, 0, 0, -1)))
         all_items = getattr(self, "all_items", []) or []
         for i in range(1, 8):
-            day_ts   = today_midnight + i * 86400
-            t        = _time.localtime(day_ts)
-            ds       = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
-            dsp      = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
+            day_ts = today_midnight + i * 86400
+            t = _time.localtime(day_ts)
+            ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
+            dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
             start_ts = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
-            end_ts   = start_ts + 86399
-            count    = sum(1 for item in all_items
+            end_ts = start_ts + 86399
+            count = sum(1 for item in all_items
                            if start_ts <= item.get("timestamp", 0) <= end_ts)
             if i == 1:
                 label = _b("Morgen (%s) - %d" % (dsp, count))
             else:
-                wd    = _WEEKDAYS[t.tm_wday]
+                wd = _WEEKDAYS[t.tm_wday]
                 label = wd + _b(" (%s) - %d" % (dsp, count))
             choices.append((label, ds))
         self.session.openWithCallback(
@@ -3098,7 +3098,7 @@ class OeMediathekScreen(Screen):
             y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
             # Mitternacht bis 23:59:59 in der Lokalzeit der Box
             start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
-            end_ts   = start_ts + 86399
+            end_ts = start_ts + 86399
         except Exception:
             self["status_label"].setText(_b("Datum ungueltig!"))
             return
@@ -3115,7 +3115,6 @@ class OeMediathekScreen(Screen):
             return
 
         self._show_sv_sn_flat(date_str)
-
 
     def _sv_reset(self):
         """SV/SN-Filter aufheben — zurück zur vollständigen Gruppenansicht."""
@@ -3337,8 +3336,8 @@ class OeMediathekScreen(Screen):
         self._first_desc_timer.start(300, True)
 
     def _set_list(self, items):
-        self._list_items  = list(items)
-        self._list_sel    = 0
+        self._list_items = list(items)
+        self._list_sel = 0
         self._list_scroll = 0
         self._render_list()
 
@@ -3390,17 +3389,17 @@ class OeMediathekScreen(Screen):
                 else:
                     self["list_sel_%d" % i].hide()
             else:
-                self["list_sel_%d"   % i].hide()
+                self["list_sel_%d" % i].hide()
                 self["list_label_%d" % i].hide()
-                self["list_dot_%d"   % i].hide()
+                self["list_dot_%d" % i].hide()
 
     def _list_step(self, step):
         total = len(self._list_items)
         if total == 0:
             return
-        old_sel    = self._list_sel
+        old_sel = self._list_sel
         old_scroll = self._list_scroll
-        new_sel    = (old_sel + step) % total
+        new_sel = (old_sel + step) % total
         self._list_sel = new_sel
         if self._list_sel < self._list_scroll:
             self._list_scroll = self._list_sel
@@ -4383,17 +4382,17 @@ class OeMediathekDirBrowser(_CustomListMixin, Screen):
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions", "ColorActions", "ListboxActions"],
             {
-                "ok":           self._on_ok,
-                "cancel":       self._on_cancel,
-                "yellow":       self._new_folder,
-                "up":           self._on_up,
-                "down":         self._on_down,
-                "upRepeated":   self._on_up,
+                "ok": self._on_ok,
+                "cancel": self._on_cancel,
+                "yellow": self._new_folder,
+                "up": self._on_up,
+                "down": self._on_down,
+                "upRepeated": self._on_up,
                 "downRepeated": self._on_down,
-                "left":         self._on_page_up,
-                "right":        self._on_page_down,
-                "pageUp":       self._on_page_up,
-                "pageDown":     self._on_page_down,
+                "left": self._on_page_up,
+                "right": self._on_page_down,
+                "pageUp": self._on_page_up,
+                "pageDown": self._on_page_down,
             },
             -1,
         )
@@ -4575,11 +4574,11 @@ class OeMediathekSettingsScreen(Screen):
         self["actions"] = ActionMap(
             ["OkCancelActions", "DirectionActions"],
             {
-                "ok":          self._on_ok,
-                "cancel":      self.close,
-                "up":          self._move_up,
-                "upRepeated":  self._move_up,
-                "down":        self._move_down,
+                "ok": self._on_ok,
+                "cancel": self.close,
+                "up": self._move_up,
+                "upRepeated": self._move_up,
+                "down": self._move_down,
                 "downRepeated": self._move_down,
             },
             -1,

@@ -471,24 +471,30 @@ class Downloader:
         download_batched(video_segs, vid_tmp)
         if self._cancelled:
             for p in (vid_tmp,):
-                try: os.remove(p)
-                except Exception: pass
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
             return
 
         if audio_segs:
             download_batched(audio_segs, aud_tmp)
             if self._cancelled:
                 for p in (vid_tmp, aud_tmp):
-                    try: os.remove(p)
-                    except Exception: pass
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
                 return
             cmd = ["ffmpeg", "-y", "-i", vid_tmp, "-i", aud_tmp,
                    "-c", "copy", "-f", "mpegts", fp]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             proc.wait()
             for p in (vid_tmp, aud_tmp):
-                try: os.remove(p)
-                except Exception: pass
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
             if proc.returncode != 0:
                 err = proc.stderr.read()[-300:]
                 raise Exception("ffmpeg Mux Fehler (Code %d): %s" % (proc.returncode, err))
