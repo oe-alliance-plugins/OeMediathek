@@ -21,7 +21,6 @@ except ImportError:
 from Plugins.Plugin import PluginDescriptor
 from Screens.Screen import Screen
 from Screens.VirtualKeyBoard import VirtualKeyBoard
-from Screens.ChoiceBox import ChoiceBox
 from Components.ActionMap import ActionMap
 from Components.Label import Label
 from Components.ScrollLabel import ScrollLabel
@@ -1898,8 +1897,7 @@ def _check_stream_status(url, callback):
                                 seg_url = line
                                 break
                             elif line.startswith("/") and ".m3u8" in line:
-                                _b = _urlparse(url)
-                                _pb = _up(url)
+                                _pb = _urlparse(url)
                                 seg_url = _pb.scheme + "://" + _pb.netloc + line
                                 break
                             elif line and not line.startswith("#") and ".m3u8" in line:
@@ -1916,8 +1914,8 @@ def _check_stream_status(url, callback):
                                     resp2.close()
                                 except Exception:
                                     pass
-                            dates = [l.split(":", 1)[1] for l in seg.splitlines()
-                                     if l.startswith("#EXT-X-PROGRAM-DATE-TIME:")]
+                            dates = [x.split(":", 1)[1] for x in seg.splitlines()
+                                     if x.startswith("#EXT-X-PROGRAM-DATE-TIME:")]
                             if dates:
                                 import re as _re
                                 raw = dates[-1].strip()

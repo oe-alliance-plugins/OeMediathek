@@ -8,8 +8,9 @@ import json
 import threading
 import subprocess
 import time
+import re
 
-from urllib.request import Request, HTTPRedirectHandler, build_opener, HTTPSHandler
+from urllib.request import Request, HTTPRedirectHandler, build_opener, HTTPSHandler, urlopen
 from urllib.parse import urljoin
 
 try:
@@ -392,7 +393,7 @@ class Downloader:
                     if _fetch_opener:
                         return _fetch_opener.open(r, timeout=30).read()
                     return urlopen(r, timeout=30).read()
-                except Exception as e:
+                except Exception:
                     if attempt < retries - 1:
                         time.sleep(2 ** attempt)
                     else:
@@ -400,9 +401,9 @@ class Downloader:
 
         def get_segments(playlist_url):
             data = fetch(playlist_url).decode("utf-8", "ignore")
-            return [urljoin(playlist_url, l.strip())
-                    for l in data.splitlines()
-                    if l.strip() and not l.strip().startswith("#")]
+            return [urljoin(playlist_url, x.strip())
+                    for x in data.splitlines()
+                    if x.strip() and not x.strip().startswith("#")]
 
         # Master-Playlist auswerten
         master = fetch(self.url).decode("utf-8", "ignore")
