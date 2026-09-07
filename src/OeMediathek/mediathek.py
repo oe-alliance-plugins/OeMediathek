@@ -2,27 +2,26 @@
 # mediathek.py
 # Holt Sendungslisten über MediathekViewWeb-API (aggregiert alle ÖR-Sender)
 
-import json
 import io
+import json
 import os
+import re as _re
 import threading
 import time
-
 from urllib.request import urlopen, Request
 
-try:
-    import ssl
-    _ssl_context = ssl._create_unverified_context()
-except Exception:
-    _ssl_context = None
-
-LOG_FILE = "/tmp/oemediathek.log"
+LOG_FILE = "/tmp/OeMediathek/oemediathek.log"
 FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
 EPISODE_FAVORITES_FILE = "/etc/enigma2/oemediathek_episode_favorites.json"
 WATCHED_FILE = "/etc/enigma2/oemediathek_watched.json"
 SEARCH_HISTORY_FILE = "/etc/enigma2/oemediathek_search_history.json"
 SEARCH_HISTORY_MAX = 10
 DEBUG = False
+
+try:
+    from .downloader import get_debug_logging as _get_debug_logging
+except ImportError:
+    _get_debug_logging = None
 
 # Bekannte Sendernamen fuer die Favoriten-Bereinigung (Duplikat zu CHANNEL_MAP in plugin.py,
 # aber mediathek.py soll ohne plugin.py lauffaehig bleiben).
@@ -83,18 +82,9 @@ def _repair_mojibake(text):
     return text
 
 
-def _s(val):
-    """Gibt val als nativen Text-String zurück (Python 3 / Enigma2)."""
-    if val is None:
-        return ""
-    if isinstance(val, bytes):
-        return _decode_bytes(val)
-    return _repair_mojibake(str(val))
-
-
 def _valid_stream_url(url):
     """Return a playable URL or an empty string for API placeholders such as 'Offline'."""
-    url = _s(url).strip()
+    url = _normalize_stream_url(_s(url).strip())
     if not url:
         return ""
     if url.lower() in ("offline", "null", "none", "false", "n/a", "-", ""):
@@ -104,33 +94,105 @@ def _valid_stream_url(url):
     return url
 
 
+def _item_to_text(item):
+    """Convert all bytes values in an item dict to text for JSON."""
+    result = {}
+    for k, v in item.items():
+        if isinstance(v, bytes):
+            result[_s(k)] = _s(v)
+        else:
+            result[_s(k)] = v
+    return result
+
+
+def _s(val):
+    """Gibt val als nativen Text-String zurück (Python 3 / Enigma2)."""
+    if val is None:
+        return ""
+    if isinstance(val, bytes):
+        return _decode_bytes(val)
+    return _repair_mojibake(str(val))
+
+
 def _log(msg):
-    if not DEBUG:
+    enabled = _get_debug_logging() if _get_debug_logging else DEBUG
+    if not enabled:
         return
-    line = "[OeMediathek] " + str(msg)
+    line = "[OeMediathek %s] MW: %s" % (time.strftime("%H:%M:%S", time.localtime()), str(msg))
     print(line)
     try:
+        log_dir = os.path.dirname(LOG_FILE)
+        if not os.path.isdir(log_dir):
+            os.makedirs(log_dir)
         with io.open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
         pass
 
 
+try:
+    import ssl
+    _ssl_context = ssl._create_unverified_context()
+except Exception:
+    _ssl_context = None
+
+
+def _normalize_stream_url(url):
+    """MVW liefert bei manchen Feeds (bestaetigt: BR/ARD-alpha) die Stream-URL
+    protokollrelativ ohne Schema zurueck ("//cdn-storage.br.de/..." statt
+    "https://cdn-storage.br.de/..."). exteplayer3/serviceapp interpretiert das
+    dann als lokalen Dateipfad (file:////cdn-storage.br.de/...), findet die
+    Datei natuerlich nicht und beendet sich sofort ohne sichtbaren Fehler
+    (serviceapp.log: PLAYBACK_OPEN sts=-1, exteplayer3 exited innerhalb weniger
+    Millisekunden). Fehlendes Schema hier ergaenzen, bevor die URL irgendwo
+    weiterverwendet wird."""
+    url = _s(url).strip()
+    if url.startswith("//"):
+        return "https:" + url
+    return url
+
+
+def _dedupe_by_url(items):
+    """Entfernt Duplikate anhand des URL-Pfads (Hostname ignoriert, da CDN-Varianten
+    existieren). MVW liefert vereinzelt denselben Eintrag doppelt oder dreifach zurueck
+    (z.B. durch Re-Indexierung eines Senderfeeds) - betraf u.a. "Sendung verpasst?".
+    Behaelt die Reihenfolge, der erste Treffer gewinnt."""
+    seen = set()
+    result = []
+    for item in items:
+        url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
+        url_str = url.decode("utf-8", "replace") if isinstance(url, bytes) else (url or "")
+        try:
+            path_key = url_str.split("://", 1)[1].split("/", 1)[1] if "://" in url_str else url_str
+        except Exception:
+            path_key = url_str
+        if path_key and path_key in seen:
+            continue
+        if path_key:
+            seen.add(path_key)
+        result.append(item)
+    return result
+
+
 # ------------------------------------------------------------------
 # MediathekViewWeb-API
 # POST https://mediathekviewweb.de/api/query
 # ------------------------------------------------------------------
-def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=0, sort_by="timestamp", search_fields=None):
+def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=0, sort_by="timestamp", search_fields=None, topic_filter=None):
     """
     Fragt die MediathekViewWeb-API ab.
     search_fields: Liste der Felder fuer die Suche, Standard ["title", "topic"]
     sort_by: "timestamp" | "duration" | "topic" (alle API-seitig)
+    topic_filter: schraenkt Suche auf exaktes topic ein (zusaetzliche Query-Bedingung)
     """
     url = "https://mediathekviewweb.de/api/query"
 
     queries = []
     if channel:
         queries.append({"fields": ["channel"], "query": channel})
+
+    if topic_filter:
+        queries.append({"fields": ["topic"], "query": topic_filter})
 
     if search_term:
         fields = search_fields if search_fields else ["title", "topic"]
@@ -147,7 +209,7 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
         "queries": queries,
         "sortBy": api_sort,
         "sortOrder": sort_order,
-        "future": False,
+        "future": True,
         "offset": offset,
         "size": size,
     }
@@ -208,9 +270,17 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
         if ch.upper().startswith("ARTE") and ch.upper() != "ARTE.DE":
             continue
 
+        # MVW-Channel-Suche ist eine Textsuche, kein Exact-Match: "ARD" matcht auch
+        # "ARD-alpha", "ZDF" matcht auch "ZDFneo"/"ZDF-tivi", "SR" matcht auch "SRF".
+        # Fuer eigene Sender-Kacheln (channel-Filter gesetzt) nur exakte Treffer
+        # behalten, sonst landen Sendungen anderer, eigenstaendiger Kacheln zusaetzlich
+        # in der falschen Kachel (z.B. RESPEKT/ARD-alpha in "ARD Mediathek").
+        if channel and ch.upper() != channel.upper() and not (channel.upper() == "ARTE" and ch.upper() == "ARTE.DE"):
+            continue
+
         # HD und SD getrennt auslesen
         # ORF: Q8C (HD) seit 2026-06 auf "video_not_available"-Tafel umgeleitet — kein HD anbieten
-        url_hd = "" if ch.upper() == "ORF" else (entry.get("url_video_hd") or "")
+        url_hd = "" if ch.upper() == "ORF" else _valid_stream_url(entry.get("url_video_hd") or "")
         url_sd = _valid_stream_url(entry.get("url_video") or "")
 
         desc = _s(entry.get("description", ""))
@@ -280,7 +350,10 @@ def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=
             "description": _s(desc),
             "duration": _s(duration_str),
             "timestamp": ts,
+            "url_website": _s(entry.get("url_website") or ""),
         })
+
+    items = _dedupe_by_url(items)
 
     _log("MVW %d Sendungen verarbeitet" % len(items))
     return items, total_results, raw_count
@@ -562,17 +635,6 @@ def _save_episode_favorites(items):
         _log("Episode-Favoriten speichern Fehler: " + str(e))
 
 
-def _item_to_text(item):
-    """Convert all bytes values in an item dict to text for JSON."""
-    result = {}
-    for k, v in item.items():
-        if isinstance(v, bytes):
-            result[_s(k)] = _s(v)
-        else:
-            result[_s(k)] = v
-    return result
-
-
 def is_episode_favorite(url_value):
     url = _s(url_value)
     return any(e.get("stream_url_hd") == url or e.get("stream_url_sd") == url
@@ -632,6 +694,12 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
             prefix = group.split(": ", 1)[0]
             if prefix in _KNOWN_CHANNELS:
                 pure_topic = group.split(": ", 1)[1]
+
+        # ZDF UHD Topics: Statische Liste verwenden statt MVW
+        if channel == "ZDF UHD":
+            items, _, _ = get_zdf_uhd_static_episodes(pure_topic)
+            results[idx] = items
+            return
 
         matched = []
         with _sem:
@@ -697,6 +765,7 @@ def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by=
 
 # ------------------------------------------------------------------
 # Suchverlauf
+# Gespeichert als JSON: Liste von Unicode-Strings, neueste zuerst
 # ------------------------------------------------------------------
 def load_search_history():
     """Gibt die gespeicherte Suchliste zurueck (neueste zuerst)."""
@@ -724,3 +793,457 @@ def save_search_history(term):
             json.dump(history, f, ensure_ascii=False)
     except Exception as e:
         _log("Suchverlauf speichern Fehler: " + str(e))
+
+# ---------------------------------------------------------------------------
+# ZDF UHD – Sendungsliste via ZDF GraphQL-API + URL-Auflösung
+# ---------------------------------------------------------------------------
+
+
+def get_zdf_uhd_shows():
+    """Liefert die aktuelle UHD-Sendungsliste vom ZDF (GraphQL-API)."""
+    token_url = "https://zdf-prod-futura.zdf.de/mediathekV2/token"
+    req = Request(token_url, headers={"User-Agent": "Mozilla/5.0"})
+    resp = urlopen(req, timeout=10, context=_ssl_context) if _ssl_context else urlopen(req, timeout=10)
+    data = json.loads(resp.read().decode("utf-8"))
+    token = data["type"] + " " + data["token"]
+
+    graphql_url = "https://api.zdf.de/graphql"
+    query = ('{ metaCollectionContent(collectionId: "streaming_option-uhd"'
+             ' input: { appId: "ffw-mt-web-32276a07" pagination: { first: 50 }'
+             ' user: { abGroup: "gruppe-b", userSegment: "" } })'
+             ' { smartCollections { title id canonical } } }')
+    body = json.dumps({"query": query})
+    if isinstance(body, str):
+        body = body.encode("utf-8")
+    req = Request(graphql_url, data=body, headers={
+        "User-Agent": "Mozilla/5.0",
+        "Content-Type": "application/json",
+        "Api-Auth": token,
+        "Apollo-Require-Preflight": "True",
+    })
+    resp = urlopen(req, timeout=10, context=_ssl_context) if _ssl_context else urlopen(req, timeout=10)
+    result = json.loads(resp.read().decode("utf-8"))
+    return result.get("data", {}).get("metaCollectionContent", {}).get("smartCollections", [])
+
+
+# ZDF HDR-Suffixe: 4K UHD (2160p) zuerst, dann Full-HD HDR (1080p)
+_ZDF_HDR_SUFFIXES = ["_4692k_p72v16.mp4", "_2892k_p71v16.mp4"]
+
+
+def uhd_url_candidate(url):
+    """Gibt den 4K-Kandidaten zurück (nur Regex, kein Netzwerkzugriff). Für Icon-Checks."""
+    if "akamaihd.net" not in url or "/zdf/" not in url:
+        return url
+    return _re.sub(r"_\d+k_p\d+v\d+\.mp4$", "_4692k_p72v16.mp4", url)
+
+
+def uhd_url_candidates(url):
+    """Gibt alle HDR-Kandidaten zurück (4K + 1080p HDR), ohne Netzwerkzugriff."""
+    if "akamaihd.net" not in url or "/zdf/" not in url:
+        return [url]
+    return [_re.sub(r"_\d+k_p\d+v\d+\.mp4$", s, url) for s in _ZDF_HDR_SUFFIXES]
+
+
+def resolve_uhd_url(url):
+    """Prüft per HEAD-Request: 4K UHD zuerst, dann 1080p HDR; Fallback auf Original."""
+    if "akamaihd.net" not in url or "/zdf/" not in url:
+        return url
+    for suffix in _ZDF_HDR_SUFFIXES:
+        candidate = _re.sub(r"_\d+k_p\d+v\d+\.mp4$", suffix, url)
+        if candidate == url:
+            continue
+        try:
+            req = Request(candidate)
+            req.get_method = lambda: "HEAD"
+            resp = urlopen(req, timeout=2, context=_ssl_context) if _ssl_context else urlopen(req, timeout=2)
+            if resp.getcode() == 200:
+                return candidate
+        except Exception:
+            pass
+    return url
+
+
+def _find_uhd_streams_in(obj):
+    """Sucht rekursiv nach MP4-Streams mit _p72v (4K UHD) oder _p71v (1080p HDR)."""
+    result = []
+    if isinstance(obj, dict):
+        url_val = obj.get("url")
+        if obj.get("mimeType") == "video/mp4" and url_val and isinstance(url_val, (bytes, str, type(""))):
+            result.append(url_val)
+        for v in obj.values():
+            result.extend(_find_uhd_streams_in(v))
+    elif isinstance(obj, list):
+        for item in obj:
+            result.extend(_find_uhd_streams_in(item))
+    return result
+
+
+def resolve_uhd_url_via_document_api(url_website, with_meta=False):
+    """ZDF Document API → exakte _p72v (4K) / _p71v (1080p HDR) URL. Gibt None bei Fehler.
+    Mit with_meta=True wird stattdessen (url, season, episode) zurueckgegeben -
+    season/episode sind None, falls ZDF sie fuer diese Sendung nicht pflegt
+    (nur bei manchen Serien wie "Die Bergretter" vorhanden, siehe [[project_zdf_uhd]])."""
+    empty = (None, None, None) if with_meta else None
+    if not url_website:
+        return empty
+    ws = url_website if isinstance(url_website, str) else url_website.decode("utf-8", "replace")
+    canonical = ws.rstrip("/").split("/")[-1]
+    if not canonical:
+        return empty
+    api_url = "https://zdf-prod-futura.zdf.de/mediathekV2/document/" + canonical
+    try:
+        req = Request(api_url)
+        resp = urlopen(req, timeout=5, context=_ssl_context) if _ssl_context else urlopen(req, timeout=5)
+        data = json.loads(resp.read().decode("utf-8"))
+        streams = _find_uhd_streams_in(data)
+        uhd = [u for u in streams if "_p72v" in u or "_p71v" in u]
+        if not uhd:
+            return empty
+        main = [u for u in uhd if "_a1a2_" in u]
+        url = main[0] if main else uhd[0]
+        if not with_meta:
+            return url
+        doc = data.get("document", {}) if isinstance(data, dict) else {}
+        season = episode = None
+        try:
+            if doc.get("seasonNumber") is not None:
+                season = int(doc.get("seasonNumber"))
+            if doc.get("episodeNumber") is not None:
+                episode = int(doc.get("episodeNumber"))
+        except (TypeError, ValueError):
+            season = episode = None
+        return url, season, episode
+    except Exception:
+        return empty
+
+
+def get_zdf_uhd_topic_episodes(topic, offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
+    """Episoden einer bestimmten ZDF-UHD-Sendung (topic-gefiltert).
+    Fallback auf Titelsuche für Einzelfilme (topic='Filme' in mediathekviewweb)."""
+    sf = ["title"] if search_term else None
+    items, total, raw = _mvw_query("ZDF", size, offset, search_term, min_duration, sort_by,
+                                   search_fields=sf, topic_filter=topic)
+    if not items and not search_term:
+        items, total, raw = _mvw_query("ZDF", size, offset, topic, min_duration, sort_by,
+                                       search_fields=["title"])
+    return items, total, raw
+
+
+# ---------------------------------------------------------------------------
+# ZDF UHD – statische, verifizierte Episodenliste
+# ---------------------------------------------------------------------------
+
+_UHD_STATIC_DATA = None
+_UHD_STATIC_PATH = os.path.join(os.path.dirname(__file__), "zdf_uhd_static.json")
+_UHD_EXTRA_THEMEN = ["Die Bergretter"]
+
+
+def _load_uhd_static():
+    global _UHD_STATIC_DATA
+    if _UHD_STATIC_DATA is None:
+        try:
+            with io.open(_UHD_STATIC_PATH, encoding="utf-8") as f:
+                raw = json.load(f)
+            # Neues Format: {"episodes": [...], "no_hdr_topics": [...]}
+            if isinstance(raw, dict):
+                _UHD_STATIC_DATA = raw
+            else:
+                _UHD_STATIC_DATA = {"episodes": raw, "no_hdr_topics": []}
+        except Exception:
+            _UHD_STATIC_DATA = {"episodes": [], "no_hdr_topics": []}
+    return _UHD_STATIC_DATA
+
+
+def get_zdf_uhd_static_topics():
+    """Gibt die eindeutigen Serientitel aus der statischen UHD-Liste zurück (geordnet nach erstem Auftreten)."""
+    seen = []
+    for entry in _load_uhd_static()["episodes"]:
+        t = entry.get("topic", "")
+        if t and t not in seen:
+            seen.append(t)
+    return seen
+
+
+def get_zdf_uhd_no_hdr_topics():
+    """Gibt Topics zurück, die geprüft wurden und kein HDR-Stream haben — zum Filtern der GraphQL-Liste."""
+    return _load_uhd_static().get("no_hdr_topics", [])
+
+
+def get_zdf_uhd_static_episodes(topic, search_term=None):
+    """Gibt Episoden für ein Topic aus der statischen Liste im mediathek.py-internen Format zurück."""
+    results = []
+    all_episodes = _load_uhd_static()["episodes"]
+
+    # Exact match; falls kein Treffer: Prefix-Fallback (GraphQL-Titel kürzer als statischer Topic-Name)
+    matched_topic = topic
+    exact_entries = [e for e in all_episodes if e.get("topic", "") == topic]
+    if not exact_entries:
+        t_lower = topic.lower()
+        for st in get_zdf_uhd_static_topics():
+            if st.lower().startswith(t_lower + " ") or st.lower().startswith(t_lower + " –") or st.lower().startswith(t_lower + " -"):
+                matched_topic = st
+                exact_entries = [e for e in all_episodes if e.get("topic", "") == matched_topic]
+                break
+
+    for entry in exact_entries:
+        if entry.get("topic", "") != matched_topic:
+            continue
+        title = entry.get("title", "")
+        if search_term:
+            st = search_term if isinstance(search_term, str) else search_term.decode("utf-8", "replace")
+            if st.lower() not in title.lower():
+                continue
+        uhd_url = entry.get("uhd_url", "")
+        ts = entry.get("timestamp", 0)
+        try:
+            ts = int(ts)
+        except Exception:
+            ts = 0
+        quality = "4K UHD" if "_p72v" in uhd_url else "1080p HDR" if "_p71v" in uhd_url else ""
+        results.append({
+            "title": _s(title),
+            "group": _s(topic),
+            "channel": _s("ZDF UHD"),
+            "stream_url_hd": _s(uhd_url),
+            "stream_url_sd": _s(""),
+            "description": _s(""),
+            "duration": _s(""),
+            "quality": _s(quality),
+            "timestamp": ts,
+            "url_website": _s(entry.get("web_url") or ""),
+            "season": entry.get("season"),
+            "episode": entry.get("episode"),
+        })
+    results.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    # Beschreibung und Laufzeit aus MediathekViewWeb nachladen
+    if results:
+        try:
+            mvw_items, _, _ = _mvw_query(channel="ZDF", size=100, topic_filter=topic)
+            if not mvw_items:
+                mvw_items, _, _ = _mvw_query("ZDF", 100, 0, topic, 0, "timestamp",
+                                             search_fields=["title"])
+            if not mvw_items:
+                # Langer Topic-Name wie "Schatzinseln im Pazifik – Leben mit dem Ozean"
+                # → nur Präfix bis zum ersten " – " / " - " verwenden
+                for sep in (" – ", " - "):
+                    if sep in topic:
+                        short = topic.split(sep)[0].strip()
+                        mvw_items, _, _ = _mvw_query("ZDF", 100, 0, short, 0, "timestamp",
+                                                     search_fields=["title"])
+                        if mvw_items:
+                            break
+            mvw_titles = []
+            for item in mvw_items:
+                t = item.get("title", "")
+                if isinstance(t, bytes):
+                    t = t.decode("utf-8", "replace")
+                mvw_titles.append((t.lower(), item))
+            for ep in results:
+                ep_title = ep["title"]
+                if isinstance(ep_title, bytes):
+                    ep_title = ep_title.decode("utf-8", "replace")
+                ep_lower = ep_title.strip().lower()
+                mvw = None
+                for mvw_lower, item in mvw_titles:
+                    if mvw_lower == ep_lower or mvw_lower.startswith(ep_lower + " ") or ep_lower.startswith(mvw_lower + " "):
+                        mvw = item
+                        break
+                # Kein Folgen-Match: ersten MVW-Eintrag als Topic-Beschreibung verwenden
+                # Laufzeit dabei NICHT übernehmen (kann Teaser-Länge sein)
+                if mvw is None and mvw_titles:
+                    desc = mvw_titles[0][1].get("description", "")
+                    if desc:
+                        ep["description"] = desc
+                elif mvw:
+                    desc = mvw.get("description", "")
+                    if desc:
+                        ep["description"] = desc
+                    dur = mvw.get("duration", "")
+                    if dur:
+                        ep["duration"] = dur
+        except Exception:
+            pass
+
+    return results, len(results), len(results)
+
+
+def refresh_uhd_static():
+    """Aktualisiert zdf_uhd_static.json per ZDF GraphQL + Document API + HEAD-Check.
+    Gibt (anzahl_episoden, fehler_string_oder_None) zurück."""
+    import threading as _thr
+
+    old_count = len(_load_uhd_static().get("episodes", []))
+
+    try:
+        # Token
+        token_url = "https://zdf-prod-futura.zdf.de/mediathekV2/token"
+        req = Request(token_url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urlopen(req, timeout=10, context=_ssl_context) if _ssl_context else urlopen(req, timeout=10)
+        tok_data = json.loads(resp.read().decode("utf-8"))
+        token = tok_data["type"] + " " + tok_data["token"]
+        _log("refresh_uhd_static: Token erhalten")
+
+        # GraphQL: UHD-Kollektion mit Canonicals
+        graphql_url = "https://api.zdf.de/graphql"
+        gql = ('{ metaCollectionContent(collectionId: "streaming_option-uhd"'
+               ' input: { appId: "ffw-mt-web-32276a07" pagination: { first: 50 }'
+               ' user: { abGroup: "gruppe-b", userSegment: "" } })'
+               ' { smartCollections { title __typename'
+               ' ... on ISeriesSmartCollection { episodes { nodes { title canonical } } }'
+               ' ... on MovieSmartCollection { video { title canonical } } } } }')
+        body = json.dumps({"query": gql})
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        req = Request(graphql_url, data=body, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Content-Type": "application/json",
+            "Api-Auth": token,
+            "Apollo-Require-Preflight": "True",
+        })
+        resp = urlopen(req, timeout=10, context=_ssl_context) if _ssl_context else urlopen(req, timeout=10)
+        raw_graphql = resp.read().decode("utf-8")
+        cols = json.loads(raw_graphql).get("data", {}).get("metaCollectionContent", {}).get("smartCollections", [])
+        _log("refresh_uhd_static: GraphQL lieferte %d Collections" % len(cols))
+
+        episodes = []
+        graphql_topics = set()
+        for sc in cols:
+            topic = sc.get("title", "")
+            graphql_topics.add(topic)
+            if sc.get("__typename") == "MovieSmartCollection":
+                v = sc.get("video") or {}
+                if v.get("canonical"):
+                    episodes.append({"topic": topic, "title": v.get("title") or topic, "canonical": v["canonical"]})
+            else:
+                for node in sc.get("episodes", {}).get("nodes", []):
+                    if node.get("canonical") and "audiodeskription" not in node.get("title", "").lower():
+                        episodes.append({"topic": topic, "title": node.get("title", ""), "canonical": node["canonical"]})
+        _log("refresh_uhd_static: %d Episoden aus GraphQL (%d Topics), frage Document API ab" % (len(episodes), len(graphql_topics)))
+
+        # Document API parallel per Threads
+        verified = [None] * len(episodes)
+        _doc_api_fail_count = [0]
+
+        def _resolve(args):
+            i, ep = args
+            url, season, episode = resolve_uhd_url_via_document_api(ep["canonical"], with_meta=True)
+            if url:
+                verified[i] = {"topic": ep["topic"], "title": ep["title"],
+                               "web_url": "", "uhd_url": url, "timestamp": 0,
+                               "season": season, "episode": episode}
+            else:
+                _doc_api_fail_count[0] += 1
+        threads = []
+        for i, ep in enumerate(episodes):
+            t = _thr.Thread(target=_resolve, args=((i, ep),))
+            t.daemon = True
+            threads.append(t)
+        for batch_start in range(0, len(threads), 20):
+            batch = threads[batch_start:batch_start + 20]
+            for t in batch:
+                t.start()
+            for t in batch:
+                t.join()
+        verified = [v for v in verified if v]
+        _log("refresh_uhd_static: Document API: %d verifiziert, %d ohne UHD/HDR-Stream oder Fehler" %
+             (len(verified), _doc_api_fail_count[0]))
+
+        # Phase 2: EXTRA_THEMEN per MVW + HEAD-Check
+        _HDR_SUFFIXES = ["_4692k_p72v16.mp4", "_2892k_p71v16.mp4"]
+        extra = [t for t in _UHD_EXTRA_THEMEN if t not in graphql_topics]
+        for topic in extra:
+            mvw_items, _, _ = _mvw_query(channel="ZDF", topic_filter=topic, size=100)
+            extra_candidates = []
+            seen_urls = set()
+            for item in mvw_items:
+                url_hd = item.get("stream_url_hd", "")
+                if isinstance(url_hd, bytes):
+                    url_hd = url_hd.decode("utf-8", "replace")
+                if not url_hd or "akamaihd.net" not in url_hd or url_hd in seen_urls:
+                    continue
+                seen_urls.add(url_hd)
+                title_b = item.get("title", "")
+                title_s = title_b.decode("utf-8", "replace") if isinstance(title_b, bytes) else title_b
+                if "audiodeskription" in title_s.lower():
+                    continue
+                extra_candidates.append((topic, title_s, url_hd, item.get("timestamp", 0)))
+
+            def _head_check(args):
+                topic2, title2, url2, ts2 = args
+                for suffix in _HDR_SUFFIXES:
+                    candidate = _re.sub(r"_\d+k_p\d+v\d+\.mp4$", suffix, url2)
+                    if candidate == url2:
+                        continue
+                    try:
+                        req2 = Request(candidate)
+                        req2.get_method = lambda: "HEAD"
+                        r2 = urlopen(req2, timeout=2, context=_ssl_context) if _ssl_context else urlopen(req2, timeout=2)
+                        if r2.getcode() == 200:
+                            return {"topic": topic2, "title": title2, "web_url": "", "uhd_url": candidate, "timestamp": ts2,
+                                    "season": None, "episode": None}
+                    except Exception:
+                        pass
+                return None
+
+            hc_results = [None] * len(extra_candidates)
+
+            def _hc_worker(args):
+                idx2, cand = args
+                hc_results[idx2] = _head_check(cand)
+            hc_threads = []
+            for i, cand in enumerate(extra_candidates):
+                t = _thr.Thread(target=_hc_worker, args=((i, cand),))
+                t.daemon = True
+                hc_threads.append(t)
+            for batch_start in range(0, len(hc_threads), 15):
+                batch = hc_threads[batch_start:batch_start + 15]
+                for t in batch:
+                    t.start()
+                for t in batch:
+                    t.join()
+            verified.extend(v for v in hc_results if v)
+        _log("refresh_uhd_static: nach Phase 2 (%d Extra-Themen): %d Episoden gesamt" % (len(extra), len(verified)))
+
+        # no_hdr_topics + speichern
+        topics_found = set(item["topic"] for item in verified)
+        no_hdr_topics = sorted(graphql_topics - topics_found)
+        verified.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+
+        # Schutz vor stillem Datenverlust: wenn z.B. die Document-API-Aufrufe
+        # aus irgendeinem Grund auf der Box durchgehend fehlschlagen (jeder
+        # einzelne Fehler wird oben in resolve_uhd_url_via_document_api()
+        # lautlos verschluckt), liefert Phase 1 nichts und es bleiben nur die
+        # Phase-2-Fallback-Themen (_UHD_EXTRA_THEMEN, z.B. "Die Bergretter")
+        # uebrig - eine stark geschrumpfte Liste wuerde dann klaglos die gute
+        # alte Datei ueberschreiben. Bei drastischem Rueckgang stattdessen
+        # abbrechen, ohne zu speichern.
+        if old_count >= 10 and len(verified) < old_count * 0.5:
+            _log("refresh_uhd_static: ABBRUCH - nur %d Episoden (vorher %d), Datei NICHT ueberschrieben" %
+                 (len(verified), old_count))
+            return 0, "Nur %d von vorher %d Episoden gefunden - ZDF-API vermutlich gestoert" % (len(verified), old_count)
+
+        # Python 2: alle Strings zu unicode normalisieren, sonst schlägt json.dump fehl
+        def _to_u(obj):
+            if isinstance(obj, bytes):
+                return obj.decode("utf-8", "replace")
+            elif isinstance(obj, dict):
+                return {_to_u(k): _to_u(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [_to_u(i) for i in obj]
+            return obj
+
+        output = _to_u({"episodes": verified, "no_hdr_topics": no_hdr_topics})
+        json_bytes = json.dumps(output, indent=2, ensure_ascii=False)
+        if not isinstance(json_bytes, bytes):
+            json_bytes = json_bytes.encode("utf-8")
+        with open(_UHD_STATIC_PATH, "wb") as f:
+            f.write(json_bytes)
+
+        global _UHD_STATIC_DATA
+        _UHD_STATIC_DATA = None
+        _log("refresh_uhd_static: %d Episoden gespeichert" % len(verified))
+        return len(verified), None
+    except Exception as e:
+        _log("refresh_uhd_static: Fehler - " + str(e))
+        return 0, str(e)

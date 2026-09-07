@@ -2,16 +2,20 @@
 # downloader.py
 # HTTP-Download fuer OeMediathek — laedt MP4/TS-Streams direkt auf die Festplatte
 
-import os
 import io
+import os
 import json
 import threading
+import re
 import subprocess
 import time
-import re
 
-from urllib.request import Request, HTTPRedirectHandler, build_opener, HTTPSHandler, urlopen
-from urllib.parse import urljoin
+# Python 2/3 Kompatibilitaet
+from urllib.request import urlopen, Request, HTTPRedirectHandler, build_opener, HTTPSHandler
+
+from urllib.parse import urlparse, urljoin
+
+import http.client as _httplib
 
 try:
     import ssl
@@ -24,6 +28,29 @@ DEFAULT_SAVE_DIR = "/media/hdd/movie/OeMediathek"
 _LOG_FILE = "/tmp/OeMediathek/oemediathek.log"
 
 _ORF_USER_AGENT = "OeMediathek/1.0"
+
+
+def _decode_bytes(data):
+    if data is None:
+        return ""
+    if not isinstance(data, bytes):
+        return str(data)
+    for enc in ("utf-8", "cp1252", "latin-1"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            pass
+        except Exception:
+            pass
+    return data.decode("utf-8", "replace")
+
+
+def _to_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return _decode_bytes(value)
+    return str(value)
 
 
 def _log(msg):
@@ -134,6 +161,70 @@ def set_debug_logging(enabled):
     save_settings(s)
 
 
+def get_force_exteplayer():
+    return load_settings().get("force_exteplayer", False)
+
+
+def set_force_exteplayer(enabled):
+    s = load_settings()
+    s["force_exteplayer"] = bool(enabled)
+    save_settings(s)
+
+
+def get_download_quality():
+    return load_settings().get("download_quality", "hd")
+
+
+def set_download_quality(quality):
+    s = load_settings()
+    s["download_quality"] = quality
+    save_settings(s)
+
+
+def get_download_quality_label():
+    return "1080p" if get_download_quality() == "hd" else "720p"
+
+
+def get_stream_quality():
+    return load_settings().get("stream_quality", "ask")
+
+
+def set_stream_quality(quality):
+    s = load_settings()
+    s["stream_quality"] = quality
+    save_settings(s)
+
+
+def get_stream_quality_label():
+    v = get_stream_quality()
+    return {"ask": "Auswahl", "hd": "1080p", "720p": "720p"}.get(v, "Auswahl")
+
+
+def get_download_extra_info():
+    return load_settings().get("download_extra_info", "both")
+
+
+def set_download_extra_info(mode):
+    s = load_settings()
+    s["download_extra_info"] = mode
+    save_settings(s)
+
+
+def get_download_extra_info_label():
+    v = get_download_extra_info()
+    return {"meta": ".meta", "txt": ".txt", "both": "Beide"}.get(v, "Beide")
+
+
+def get_live_tv_background():
+    return load_settings().get("live_tv_background", True)
+
+
+def set_live_tv_background(enabled):
+    s = load_settings()
+    s["live_tv_background"] = bool(enabled)
+    save_settings(s)
+
+
 def write_info_txt(filepath, title, description=None, duration=None, topic=None):
     """Schreibt eine .txt Datei mit Sendungsinfos neben die Download-Datei."""
     try:
@@ -182,13 +273,17 @@ def write_meta(filepath, title, description=None, duration=None):
                     dur_secs = int(parts[0]) * 60 + int(parts[1])
             except (ValueError, IndexError):
                 pass
+        pts_len = dur_secs * 90000
         lines = [
-            "",
+            "1:0:0:0:0:0:0:0:0:0:",
             display_name,
             desc_str,
             str(ts),
             "",
-            str(dur_secs) if dur_secs else "",
+            str(pts_len) if pts_len else "0",
+            "0",
+            "",
+            "0",
         ]
         with io.open(meta_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
@@ -198,6 +293,8 @@ def write_meta(filepath, title, description=None, duration=None):
 
 def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
     """Konvertiert mp4_path verlustfrei zu .ts (ffmpeg -c copy) in einem Background-Thread."""
+    mp4_path = _to_text(mp4_path)
+
     def _run():
         ts_path = os.path.splitext(mp4_path)[0] + ".ts"
         try:
@@ -210,7 +307,9 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
             )
             _out, _err = proc.communicate()
             if proc.returncode != 0:
-                raise Exception("ffmpeg Fehler (Code %d)" % proc.returncode)
+                err_str = _err.decode("utf-8", "replace") if _err else ""
+                err_tail = "\n".join(err_str.strip().splitlines()[-5:])
+                raise Exception("ffmpeg Fehler (Code %d): %s" % (proc.returncode, err_tail))
             try:
                 os.remove(mp4_path)
             except Exception:
@@ -240,29 +339,6 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
 # --------------------------------------------------------------------------
 # Hilfsfunktionen
 # --------------------------------------------------------------------------
-
-
-def _decode_bytes(data):
-    if data is None:
-        return ""
-    if not isinstance(data, bytes):
-        return str(data)
-    for enc in ("utf-8", "cp1252", "latin-1"):
-        try:
-            return data.decode(enc)
-        except UnicodeDecodeError:
-            pass
-        except Exception:
-            pass
-    return data.decode("utf-8", "replace")
-
-
-def _to_text(value):
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return _decode_bytes(value)
-    return str(value)
 
 
 def _sanitize(text):
@@ -319,7 +395,7 @@ def get_content_length(url):
 
 def format_size(size_bytes):
     if size_bytes <= 0:
-        return "unbekannte Groesse"
+        return "unbekannte Größe"
     if size_bytes >= 1024 * 1024 * 1024:
         return "%.1f GB" % (size_bytes / 1024.0 / 1024.0 / 1024.0)
     if size_bytes >= 1024 * 1024:
@@ -327,15 +403,103 @@ def format_size(size_bytes):
     return "%.0f KB" % (size_bytes / 1024.0)
 
 # --------------------------------------------------------------------------
-# Download
+# Keep-Alive-Fetcher fuer HLS-Segment-Downloads
+# --------------------------------------------------------------------------
+# build_opener(...).open(...) baut bei jedem Aufruf eine komplett neue
+# TCP+TLS-Verbindung auf. Auf der schwachen ARM-CPU der VU+ Uno 4K SE
+# (Software-TLS) dominiert der Handshake pro Segment die gesamte
+# Downloadzeit - gemessen: 16 HLS-Segmente (107MB) brauchten 22.6s mit je
+# einer neuen Verbindung, nur 5.3s mit einer wiederverwendeten Verbindung
+# (4-5x schneller, reine CPU-Ersparnis, keine zusaetzliche Bandbreite).
+# httplib/http.client-HTTPSConnection-Objekte sind nicht parallel
+# benutzbar - deshalb eine eigene Connection PRO WORKER-SLOT statt ein
+# global geteilter Pool, jede Connection wird nur sequenziell von genau
+# einem Worker-Thread benutzt.
 # --------------------------------------------------------------------------
 
 
-class Downloader:
+class _KeepAliveFetcher(object):
+
+    def __init__(self, headers):
+        self._headers = headers
+        self._conns = {}  # slot -> (scheme, host, HTTPSConnection/HTTPConnection)
+
+    def fetch(self, url, slot, timeout=30, retries=3, max_redirects=5):
+        last_exc = None
+        for attempt in range(retries):
+            try:
+                cur_url = url
+                for _ in range(max_redirects):
+                    parsed = urlparse(cur_url)
+                    path = parsed.path + ("?" + parsed.query if parsed.query else "")
+                    conn = self._get_conn(slot, parsed.scheme, parsed.netloc, timeout)
+                    conn.request("GET", path, headers=self._headers)
+                    resp = conn.getresponse()
+                    if resp.status in (301, 302, 303, 307, 308):
+                        # Manche CDNs (z.B. ORF apasfiis, Varnish-Reverse-Proxy) leiten
+                        # JEDEN Segment-Request per 301 um - Redirect-Body verwerfen und
+                        # demselben Slot folgen, damit Connection-Reuse erhalten bleibt.
+                        location = resp.getheader("Location") or resp.getheader("location")
+                        resp.read()
+                        if not location:
+                            raise Exception("HTTP %d ohne Location fuer %s" % (resp.status, cur_url))
+                        cur_url = urljoin(cur_url, location)
+                        continue
+                    data = resp.read()
+                    if resp.status >= 400:
+                        raise Exception("HTTP %d fuer %s" % (resp.status, cur_url))
+                    return data
+                raise Exception("Zu viele Redirects fuer %s" % url)
+            except Exception as e:
+                last_exc = e
+                self._drop_conn(slot)
+                if attempt < retries - 1:
+                    time.sleep(0.5)
+        raise last_exc
+
+    def _get_conn(self, slot, scheme, host, timeout):
+        cached = self._conns.get(slot)
+        if cached and cached[0] == scheme and cached[1] == host:
+            return cached[2]
+        if cached:
+            try:
+                cached[2].close()
+            except Exception:
+                pass
+        if scheme == "https":
+            conn = _httplib.HTTPSConnection(host, timeout=timeout, context=_ssl_context)
+        else:
+            conn = _httplib.HTTPConnection(host, timeout=timeout)
+        self._conns[slot] = (scheme, host, conn)
+        return conn
+
+    def _drop_conn(self, slot):
+        cached = self._conns.pop(slot, None)
+        if cached:
+            try:
+                cached[2].close()
+            except Exception:
+                pass
+
+    def close_all(self):
+        for cached in self._conns.values():
+            try:
+                cached[2].close()
+            except Exception:
+                pass
+        self._conns.clear()
+
+
+# --------------------------------------------------------------------------
+# Download
+# --------------------------------------------------------------------------
+
+class Downloader(object):
     CHUNK_SIZE = 256 * 1024
 
-    def __init__(self, url, title, topic=None, description=None, duration=None, on_progress=None, on_done=None, on_error=None):
+    def __init__(self, url, title, topic=None, description=None, duration=None, target_dir=None, on_progress=None, on_done=None, on_error=None):
         # ORF _episodes: Q-Varianten gesperrt, QXA funktioniert
+        url = _to_text(url)
         if "apasfiis.sf.apa.at" in url and "_episodes" in url:
             url = re.sub(r'_Q[^./]+\.mp4', '_QXA.mp4', url)
         self.url = _to_text(url)
@@ -352,7 +516,8 @@ class Downloader:
         self._downloaded = 0
         self._total = 0
 
-        save_dir = _to_text(get_save_dir())
+        save_dir = _to_text(target_dir or get_save_dir())
+        os.makedirs(save_dir, exist_ok=True)
         filename = _make_filename(title, url, topic=topic)
         base, ext = os.path.splitext(filename)
         candidate = os.path.join(save_dir, filename)
@@ -375,10 +540,7 @@ class Downloader:
     def _download_hls_parallel(self, workers=4):
         """Laedt HLS-Segmente parallel (workers gleichzeitig) und muxiert Audio+Video mit ffmpeg."""
         import threading
-        try:
-            from urlparse import urljoin
-        except ImportError:
-            from urllib.parse import urljoin
+        from urllib.parse import urljoin
 
         try:
             _fetch_opener = build_opener(HTTPSHandler(context=_ssl_context)) if _ssl_context else None
@@ -408,12 +570,7 @@ class Downloader:
         # Master-Playlist auswerten
         master = fetch(self.url).decode("utf-8", "ignore")
         lines = master.splitlines()
-        audio_url, best_bw, best_video_url = None, -1, None
-        for line in lines:
-            if line.startswith("#EXT-X-MEDIA") and "TYPE=AUDIO" in line:
-                m = re.search(r'URI="([^"]+)"', line)
-                if m:
-                    audio_url = urljoin(self.url, m.group(1))
+        audio_url, best_bw, best_video_url, best_stream_inf = None, -1, None, None
         i = 0
         while i < len(lines):
             if lines[i].startswith("#EXT-X-STREAM-INF"):
@@ -424,8 +581,24 @@ class Downloader:
                     if v and not v.startswith("#"):
                         if bw > best_bw:
                             best_bw, best_video_url = bw, urljoin(self.url, v)
+                            best_stream_inf = lines[i]
                         break
             i += 1
+
+        # Nur den Default-Audio-Track der passenden Gruppe verwenden.
+        # ORF hat mehrere Audio-Tracks (Standard, Audiodeskription) — ohne Filterung
+        # wird der letzte Eintrag genommen, was die Audiodeskription sein kann.
+        audio_group_m = re.search(r'AUDIO="([^"]+)"', best_stream_inf or '')
+        audio_group = audio_group_m.group(1) if audio_group_m else None
+        for line in lines:
+            if line.startswith("#EXT-X-MEDIA") and "TYPE=AUDIO" in line:
+                if audio_group and ('GROUP-ID="%s"' % audio_group) not in line:
+                    continue
+                if "DEFAULT=YES" not in line:
+                    continue
+                m = re.search(r'URI="([^"]+)"', line)
+                if m:
+                    audio_url = urljoin(self.url, m.group(1))
         if not best_video_url:
             best_video_url = self.url
 
@@ -438,6 +611,14 @@ class Downloader:
         aud_tmp = fp + ".aud.tmp"
         self._total = 0
         self._downloaded = 0
+        self._muxing = False
+        self._total_segs = len(video_segs) + len(audio_segs)
+        self._segs_done = 0
+
+        # Eine Connection pro Worker-Slot, wiederverwendet ueber alle Batches
+        # UND ueber Video- und Audio-Download hinweg (meist derselbe Host) -
+        # vermeidet den TLS-Handshake pro Segment, siehe Klassen-Docstring.
+        keepalive = _KeepAliveFetcher({"User-Agent": _ORF_USER_AGENT})
 
         def download_batched(segs, out_path):
             with open(out_path, "wb") as f:
@@ -446,13 +627,13 @@ class Downloader:
                         return
                     batch = segs[start:start + workers]
                     results = [None] * len(batch)
-                    errors = [None]
+                    errors = []
 
                     def _worker(url, idx):
                         try:
-                            results[idx] = fetch(url)
+                            results[idx] = keepalive.fetch(url, idx)
                         except Exception as e:
-                            errors[0] = e
+                            errors.append(e)
 
                     threads = [threading.Thread(target=_worker, args=(url, idx))
                                for idx, url in enumerate(batch)]
@@ -460,48 +641,53 @@ class Downloader:
                         t.start()
                     for t in threads:
                         t.join()
-                    if errors[0]:
+                    if errors:
                         raise errors[0]
                     for data in results:
                         if data:
                             f.write(data)
                             self._downloaded += len(data)
+                            self._segs_done += 1
                             if self.on_progress:
                                 self.on_progress(self._downloaded, 0)
 
-        download_batched(video_segs, vid_tmp)
-        if self._cancelled:
-            for p in (vid_tmp,):
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
-            return
-
-        if audio_segs:
-            download_batched(audio_segs, aud_tmp)
+        try:
+            download_batched(video_segs, vid_tmp)
             if self._cancelled:
-                for p in (vid_tmp, aud_tmp):
+                for p in (vid_tmp,):
                     try:
                         os.remove(p)
                     except Exception:
                         pass
                 return
-            cmd = ["ffmpeg", "-y", "-i", vid_tmp, "-i", aud_tmp,
-                   "-c", "copy", "-f", "mpegts", fp]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            proc.wait()
-            for p in (vid_tmp, aud_tmp):
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
-            if proc.returncode != 0:
-                err = proc.stderr.read()[-300:]
-                raise Exception("ffmpeg Mux Fehler (Code %d): %s" % (proc.returncode, err))
-        else:
-            os.rename(vid_tmp, fp)
-        _log("ORF parallel fertig: %s" % fp)
+
+            if audio_segs:
+                download_batched(audio_segs, aud_tmp)
+                if self._cancelled:
+                    for p in (vid_tmp, aud_tmp):
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+                    return
+                cmd = ["ffmpeg", "-y", "-i", vid_tmp, "-i", aud_tmp,
+                       "-c", "copy", "-f", "mpegts", fp]
+                self._muxing = True
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                _out, err = proc.communicate()
+                self._muxing = False
+                for p in (vid_tmp, aud_tmp):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
+                if proc.returncode != 0:
+                    raise Exception("ffmpeg Mux Fehler (Code %d): %s" % (proc.returncode, _decode_bytes(err[-300:])))
+            else:
+                os.rename(vid_tmp, fp)
+            _log("ORF parallel fertig: %s" % fp)
+        finally:
+            keepalive.close_all()
 
     def _download_m3u8(self, opener, url):
         """Laedt HLS-Streams (m3u8) herunter, indem alle .ts-Segmente aneinandergehaengt werden."""
@@ -568,11 +754,10 @@ class Downloader:
                     self.on_progress(self._downloaded, 0)
 
     def _run(self):
+        resp = None
         try:
             _log("Start: %s" % self.title)
-            save_dir = _to_text(get_save_dir())
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
+            os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
 
             handlers = [KeepHeadersRedirectHandler()]
             if _ssl_context:
@@ -587,40 +772,97 @@ class Downloader:
             elif is_m3u8:
                 self._download_m3u8(opener, self.url)
             else:
-                req = Request(self.url)
-                req.add_header("User-Agent", _ORF_USER_AGENT)
-                req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
-                resp = opener.open(req, timeout=30)
-                try:
-                    total = 0
-                    try:
-                        length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
-                        if length:
-                            total = int(length)
-                    except Exception:
-                        pass
+                # Standard MP4-Download
+                def _open_mp4(offset):
+                    req = Request(self.url)
+                    req.add_header("User-Agent", _ORF_USER_AGENT)
+                    req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
+                    if offset:
+                        req.add_header("Range", "bytes=%d-" % offset)
+                    # Kurzer Timeout statt 30s: gilt in urllib2/urllib.request fuer die
+                    # gesamte Socket-Lebensdauer, nicht nur den Verbindungsaufbau -
+                    # jeder read()-Call unten respektiert ihn also auch. Ohne das kann
+                    # ein einzelner read()-Call bei einer traegen Quelle minutenlang
+                    # blockieren, wodurch cancel() (nur ein kooperatives Flag, geprueft
+                    # zwischen zwei read()-Aufrufen) entsprechend lange nicht greift.
+                    return opener.open(req, timeout=5)
 
-                    downloaded = 0
-                    with open(self.filepath, "wb") as f:
-                        while not self._cancelled:
+                resp = _open_mp4(0)
+
+                total = 0
+                try:
+                    length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
+                    if length:
+                        total = int(length)
+                except Exception:
+                    pass
+
+                downloaded = 0
+                consecutive_timeouts = 0
+                reconnects = 0
+                MAX_RECONNECTS = 3
+                with open(self.filepath, "wb") as f:
+                    while not self._cancelled:
+                        try:
                             chunk = resp.read(self.CHUNK_SIZE)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            self._downloaded = downloaded
-                            self._total = total
-                            if self.on_progress:
-                                self.on_progress(downloaded, total)
-                finally:
-                    try:
-                        resp.close()
-                    except Exception:
-                        pass
+                        except Exception as e:
+                            # Bei HTTPS landet ein Read-Timeout je nach Python-/SSL-
+                            # Version als socket.timeout ODER als ssl.SSLError -
+                            # ssl.SSLError ist KEIN Subtyp von socket.timeout, daher
+                            # hier ueber die Meldung statt die exakte Klasse pruefen.
+                            if "timed out" in str(e).lower():
+                                consecutive_timeouts += 1
+                                # Nach 6 Versuchen (~30s bei timeout=5) ist die Verbindung
+                                # sicher tot - weitere read()-Versuche auf demselben Socket
+                                # bringen nichts (die TCP-Verbindung zum CDN-Host besteht zu
+                                # diesem Zeitpunkt schon nicht mehr). Statt komplett
+                                # aufzugeben, neu verbinden und per Range-Header ab der
+                                # bereits geladenen Position weiterladen (bis zu
+                                # MAX_RECONNECTS mal) - deutlich schonender als ein vom
+                                # User manuell neu gestarteter kompletter Download.
+                                if consecutive_timeouts < 6:
+                                    continue
+                                if reconnects >= MAX_RECONNECTS:
+                                    raise Exception("Verbindung abgebrochen (keine Daten mehr empfangen)")
+                                reconnects += 1
+                                consecutive_timeouts = 0
+                                try:
+                                    resp.close()
+                                except Exception:
+                                    pass
+                                _log("Download-Reconnect %d/%d ab Byte %d: %s" % (reconnects, MAX_RECONNECTS, downloaded, self.title))
+                                time.sleep(2)
+                                if self._cancelled:
+                                    break
+                                try:
+                                    new_resp = _open_mp4(downloaded)
+                                except Exception:
+                                    continue  # naechster Loop-Durchlauf zaehlt den naechsten Reconnect
+                                if new_resp.getcode() == 206:
+                                    resp = new_resp
+                                else:
+                                    # Server ignoriert Range und liefert die Datei komplett
+                                    # von vorne - Datei entsprechend zuruecksetzen.
+                                    resp = new_resp
+                                    f.seek(0)
+                                    f.truncate()
+                                    downloaded = 0
+                                continue
+                            raise
+                        consecutive_timeouts = 0
+                        if not chunk:
+                            if total and downloaded < total:
+                                raise IOError("Download unvollständig (Verbindung vorzeitig beendet)")
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        self._downloaded = downloaded
+                        self._total = total
+                        if self.on_progress:
+                            self.on_progress(downloaded, total)
 
             if self._cancelled:
-                # Abgebrochene Datei loeschen
                 try:
                     os.remove(self.filepath)
                 except Exception:
@@ -629,8 +871,11 @@ class Downloader:
                 if self.on_error:
                     self.on_error("Abgebrochen")
             else:
-                write_info_txt(self.filepath, self.title, self.description, self.duration, self.topic)
-                write_meta(self.filepath, self.title, self.description, self.duration)
+                extra_info = get_download_extra_info()
+                if extra_info in ("txt", "both"):
+                    write_info_txt(self.filepath, self.title, self.description, self.duration, self.topic)
+                if extra_info in ("meta", "both"):
+                    write_meta(self.filepath, self.title, self.description, self.duration)
                 _log("Fertig: %s" % self.title)
                 if self.on_done:
                     self.on_done(self.filepath)
@@ -644,3 +889,9 @@ class Downloader:
                 pass
             if self.on_error:
                 self.on_error(str(e))
+        finally:
+            if resp is not None:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
