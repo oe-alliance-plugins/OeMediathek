@@ -81,6 +81,7 @@ from .mediathek import (
     get_zdf_uhd_topic_episodes,
     get_zdf_uhd_static_topics,
     get_zdf_uhd_static_episodes,
+    get_zdf_uhd_topic_quality,
     get_zdf_uhd_no_hdr_topics,
     refresh_uhd_static,
     uhd_url_candidates,
@@ -88,7 +89,7 @@ from .mediathek import (
     resolve_uhd_url_via_document_api,
 )
 from .player import play_stream_async, black_background_ref, _self_heal_all_serviceapp_backups
-from .downloader import Downloader, get_save_dir, set_save_dir, get_content_length, get_auto_convert, set_auto_convert, convert_mp4_to_ts, get_tile_wrap_lr, set_tile_wrap_lr, get_serviceapp_autoconfigure, set_serviceapp_autoconfigure, get_debug_logging, set_debug_logging, get_force_exteplayer, set_force_exteplayer, get_download_quality, set_download_quality, get_download_quality_label, get_stream_quality, set_stream_quality, get_stream_quality_label, set_download_extra_info, get_download_extra_info_label, get_live_tv_background, set_live_tv_background
+from .downloader import Downloader, get_save_dir, set_save_dir, get_content_length, get_auto_convert, set_auto_convert, convert_mp4_to_ts, get_tile_wrap_lr, set_tile_wrap_lr, get_serviceapp_autoconfigure, set_serviceapp_autoconfigure, get_debug_logging, set_debug_logging, get_force_exteplayer, set_force_exteplayer, get_download_quality, set_download_quality, get_download_quality_label, get_stream_quality, set_stream_quality, get_stream_quality_label, set_download_extra_info, get_download_extra_info_label, get_live_tv_background, set_live_tv_background, get_download_subfolder, set_download_subfolder
 from .download_manager import OeMediathekDownloadManagerScreen
 from Screens.MessageBox import MessageBox as _MessageBox  # für Download-Notification
 
@@ -758,6 +759,21 @@ def _parse_season_episode(title):
     return None, None
 
 
+def _download_title(title, season=None, episode=None):
+    """Setzt SxxEyy vor den Download-Titel und liefert nativen Python-3-Text."""
+    import re
+    text = _u(title)
+    try:
+        if season is None or episode is None:
+            season, episode = _parse_season_episode(text)
+        if season is None or episode is None:
+            return text
+        clean = re.sub(r'\s*\(S\d+/E\d+\)', '', text).strip()
+        return "S%02dE%02d %s" % (int(season), int(episode), clean)
+    except Exception:
+        return text
+
+
 def _effective_season(item):
     """Liefert die Staffelnummer eines Episoden-Dicts, egal ob sie bereits als
     Zahl vorliegt (z.B. ZDF UHD ueber die ZDF Document API, siehe
@@ -819,12 +835,23 @@ def _episode_label(title_bytes, topic_bytes=None, watched=False, season=None, ep
 
 def _sanitize_folder_name(value):
     """Macht aus einem Sendungsnamen einen dateisystemtauglichen Ordnernamen
-    (fuer Sammel-Downloads, siehe _do_bulk_download)."""
+    (fuer Einzel- und Sammel-Downloads)."""
     name = _u(value)
     for ch in '\\/:*?"<>|':
         name = name.replace(ch, '_')
     name = ' '.join(name.split()).strip(' .')
     return name[:120] or 'OeMediathek-Download'
+
+
+def _show_target_dir(name):
+    """Erstellt den Sendungs-Unterordner und liefert (Pfad, Ordnername)."""
+    folder = _sanitize_folder_name(name)
+    target_dir = os.path.join(_u(get_save_dir()), folder)
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+    except Exception:
+        target_dir = None
+    return target_dir, folder
 
 
 def _episode_stream_url(item, prefer_720p=False):
@@ -1315,7 +1342,8 @@ def _queue_error(msg):
     item = getattr(active, "_oem_queue_item", None) if active else None
     _active_downloader = None
     low = text.lower()
-    cancelled = _user_cancelled_all or getattr(active, "_cancelled", False) or low.strip() in ("abgebrochen", "cancelled", "canceled")
+    # Verbindungsabbrueche sind wiederholbare Fehler, keine Benutzerabbrueche.
+    cancelled = _user_cancelled_all or bool(getattr(active, "_cancelled", False))
     permanent = "404" in low
     if isinstance(item, dict) and not cancelled and not permanent:
         item = dict(item)
@@ -4600,8 +4628,8 @@ class OeMediathekScreen(Screen):
         "started"/"queued"/"duplicate"/"failed" - bei ZDF UHD (force_uhd)
         asynchron per Hintergrund-Thread + reactor.callFromThread, sonst
         synchron. Gemeinsame Basis fuer Einzel- (on_download) und
-        Sammel-Downloads (_do_bulk_download). target_dir wird nur bei
-        Sammel-Downloads gesetzt (eigener Unterordner je Seite/Staffel)."""
+        Sammel-Downloads (_do_bulk_download). target_dir wird bei Sammel-Downloads
+        und optional bei Einzel-Downloads gesetzt (Unterordner pro Sendung)."""
         try:
             if self.force_uhd:
                 base = _episode_stream_url(item)
@@ -4611,15 +4639,7 @@ class OeMediathekScreen(Screen):
                 desc = item.get("description", "")
                 dur = item.get("duration", "")
                 dl_topic = item.get("group") or self.cur_group_name if self.cur_group_name.startswith(">> Direkte Treffer") else self.cur_group_name
-                _title = item["title"]
-                _season, _episode = item.get("season"), item.get("episode")
-                if _season is not None and _episode is not None:
-                    try:
-                        _tstr = _u(_title)
-                        _tstr = "S%02dE%02d %s" % (int(_season), int(_episode), _tstr)
-                        _title = _tstr
-                    except Exception:
-                        pass
+                _title = _download_title(item["title"], item.get("season"), item.get("episode"))
                 _web = item.get("url_website", "")
 
                 def _enqueue_uhd(_u=base, _tl=_title, _dt=dl_topic, _d=desc, _dr=dur, _w=_web, _cb=callback, _td=target_dir):
@@ -4647,7 +4667,7 @@ class OeMediathekScreen(Screen):
             dur = item.get("duration", "")
             dl_topic = item.get("group") or self.cur_group_name if self.cur_group_name.startswith(">> Direkte Treffer") else self.cur_group_name
 
-            state = _enqueue_download(item["title"], url, dl_topic, desc, dur, target_dir=target_dir)
+            state = _enqueue_download(_download_title(item["title"], item.get("season"), item.get("episode")), url, dl_topic, desc, dur, target_dir=target_dir)
             callback(state)
         except Exception:
             _log("_enqueue_single_episode Fehler: " + _fmt_exc())
@@ -4686,7 +4706,12 @@ class OeMediathekScreen(Screen):
             self._update_red_hint()
             self._render_list()
 
-        self._enqueue_single_episode(item, _done)
+        target_dir = None
+        if get_download_subfolder():
+            show = _u(item.get("group") or self.cur_group_name)
+            if show and not show.startswith(">> "):
+                target_dir = _show_target_dir(show)[0]
+        self._enqueue_single_episode(item, _done, target_dir=target_dir)
 
     def _cancel_pending_download(self, url):
         """Bricht einen bereits laufenden oder wartenden Download ab (per
@@ -4757,13 +4782,7 @@ class OeMediathekScreen(Screen):
     def _do_bulk_download(self, items):
         if not items:
             return
-        folder = _sanitize_folder_name(self.cur_group_name)
-        base = _u(get_save_dir())
-        target_dir = os.path.join(base, folder)
-        try:
-            os.makedirs(target_dir, exist_ok=True)
-        except Exception:
-            target_dir = None
+        target_dir, folder = _show_target_dir(self.cur_group_name)
 
         counts = {"started": 0, "queued": 0, "duplicate": 0, "failed": 0}
         remaining = [len(items)]
@@ -5503,14 +5522,12 @@ class OeMediathekScreen(Screen):
     def on_green(self):
         if self._ep_fav_sort_mode or self._fav_sort_mode:
             self.cycle_sort()
-        elif self.source_name == "Meine Favoriten":
-            # "Meine Favoriten" ist eine lokal zusammengestellte Liste, kein
-            # per API nachladbares Thema - cycle_ep_sort()/cycle_sort() wuerden
-            # hier faelschlich ein zufaelliges Thema live nachladen. In der
-            # Episodenansicht uebernimmt Gruen stattdessen den Sortiermodus
-            # (frueher auf Rot), in der Gruppenansicht gibt es hier nichts zu tun.
-            if self._fav_show_episodes:
-                self._ep_fav_toggle_sort_mode()
+        elif self.source_name == "Meine Favoriten" and self.mode == MODE_GROUPS:
+            # Lokale Favoriten-Gruppen nicht per API nachladen; Sortieren ueber Rot.
+            pass
+        elif self.source_name == "Meine Favoriten" and self._fav_show_episodes:
+            # Die flachen Einzelfolgen-Favoriten werden manuell sortiert.
+            self._ep_fav_toggle_sort_mode()
         elif self.mode == MODE_EPISODES and self.force_uhd and self.zdf_uhd_static:
             # Statische ZDF-UHD-Liste kennt keine Sortierung (get_zdf_uhd_static_episodes
             # hat keinen sort_by-Parameter) - Gruen bleibt hier ohne Wirkung.
@@ -6066,6 +6083,12 @@ class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
         from twisted.internet import reactor
         reactor.callFromThread(self._on_shows, shows, None)
 
+    def _show_label(self, show):
+        """Ergaenzt die lokal bekannte Qualitaet ohne zusaetzlichen Netzwerkabruf."""
+        title = _u(show.get("title", ""))
+        quality = get_zdf_uhd_topic_quality(title)
+        return title + "  [" + quality + "]" if quality else title
+
     def _on_shows(self, shows, err):
         self._shows = shows
         self._shows_orig = list(shows)
@@ -6077,7 +6100,7 @@ class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
         else:
             n = len(shows)
             self["status_label"].setText(_b(str(n) + " Sendung" + ("en" if n != 1 else "")))
-            self._set_list([_b(s.get("title", "")) for s in shows])
+            self._set_list([self._show_label(s) for s in shows])
             self._update_hint_page()
         self._update_dots()
 
@@ -6214,7 +6237,7 @@ class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
         else:
             self._shows = list(self._shows_orig)
             self["hint_green"].setText(_b("A-Z"))
-        self._set_list([_b(s.get("title", "")) for s in self._shows])
+        self._set_list([self._show_label(s) for s in self._shows])
         self._update_hint_page()
         self._update_dots()
 
@@ -6245,6 +6268,8 @@ class OeMediathekSettingsScreen(Screen):
     _ENTRIES = [
         ("Download-Ordner", 0, None,
          "Speicherort für heruntergeladene Sendungen auf der Box auswählen."),
+        ("Unterordner pro Sendung:", 11, get_download_subfolder,
+         "Einzel-Downloads in einem Unterordner mit dem Sendungsnamen speichern (Sammel-Downloads immer)."),
         ("MP4 -> TS Konvertierung:", 1, get_auto_convert,
          "Heruntergeladene MP4-Dateien nach dem Download automatisch in TS umwandeln."),
         ("Download-Qualität:", 6, get_download_quality_label,
@@ -6397,6 +6422,8 @@ class OeMediathekSettingsScreen(Screen):
             self._toggle_force_exteplayer()
         elif action_id == 10:
             self._toggle_live_tv_background()
+        elif action_id == 11:
+            self._toggle_download_subfolder()
         elif action_id == 2:
             self._reset_order()
 
@@ -6497,6 +6524,10 @@ class OeMediathekSettingsScreen(Screen):
 
     def _toggle_live_tv_background(self):
         set_live_tv_background(not get_live_tv_background())
+        self._refresh()
+
+    def _toggle_download_subfolder(self):
+        set_download_subfolder(not get_download_subfolder())
         self._refresh()
 
     def _reset_order(self):

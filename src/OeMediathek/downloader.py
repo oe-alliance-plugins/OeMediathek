@@ -225,6 +225,16 @@ def set_live_tv_background(enabled):
     save_settings(s)
 
 
+def get_download_subfolder():
+    return load_settings().get("download_subfolder", False)
+
+
+def set_download_subfolder(enabled):
+    s = load_settings()
+    s["download_subfolder"] = bool(enabled)
+    save_settings(s)
+
+
 def write_info_txt(filepath, title, description=None, duration=None, topic=None):
     """Schreibt eine .txt Datei mit Sendungsinfos neben die Download-Datei."""
     try:
@@ -799,11 +809,12 @@ class Downloader(object):
                     pass
 
                 downloaded = 0
-                consecutive_timeouts = 0
                 reconnects = 0
+                reconnect_pos = 0
                 MAX_RECONNECTS = 3
                 with open(self.filepath, "wb") as f:
                     while not self._cancelled:
+                        reconnect_msg = None
                         try:
                             chunk = resp.read(self.CHUNK_SIZE)
                         except Exception as e:
@@ -811,26 +822,29 @@ class Downloader(object):
                             # Version als socket.timeout ODER als ssl.SSLError -
                             # ssl.SSLError ist KEIN Subtyp von socket.timeout, daher
                             # hier ueber die Meldung statt die exakte Klasse pruefen.
-                            if "timed out" in str(e).lower():
-                                consecutive_timeouts += 1
-                                # Nach 6 Versuchen (~30s bei timeout=5) ist die Verbindung
-                                # sicher tot - weitere read()-Versuche auf demselben Socket
-                                # bringen nichts (die TCP-Verbindung zum CDN-Host besteht zu
-                                # diesem Zeitpunkt schon nicht mehr). Statt komplett
-                                # aufzugeben, neu verbinden und per Range-Header ab der
-                                # bereits geladenen Position weiterladen (bis zu
-                                # MAX_RECONNECTS mal) - deutlich schonender als ein vom
-                                # User manuell neu gestarteter kompletter Download.
-                                if consecutive_timeouts < 6:
-                                    continue
+                            if "timed out" not in str(e).lower():
+                                raise
+                            # Nach einem Read-Timeout nicht auf demselben Socket
+                            # weiterlesen: per Range ab der wirklich geschriebenen
+                            # Position fortsetzen, damit keine gepufferten Bytes fehlen.
+                            reconnect_msg = "Verbindung abgebrochen (keine Daten mehr empfangen)"
+                        else:
+                            if not chunk:
+                                if not (total and downloaded < total):
+                                    break
+                                # Sauberer EOF vor Content-Length ist unvollstaendig;
+                                # die fehlenden Bytes ueber eine neue Verbindung holen.
+                                reconnect_msg = "Download unvollständig (Verbindung vorzeitig beendet)"
+                        if reconnect_msg:
+                            try:
+                                resp.close()
+                            except Exception:
+                                pass
+                            new_resp = None
+                            while new_resp is None and not self._cancelled:
                                 if reconnects >= MAX_RECONNECTS:
-                                    raise Exception("Verbindung abgebrochen (keine Daten mehr empfangen)")
+                                    raise Exception(reconnect_msg)
                                 reconnects += 1
-                                consecutive_timeouts = 0
-                                try:
-                                    resp.close()
-                                except Exception:
-                                    pass
                                 _log("Download-Reconnect %d/%d ab Byte %d: %s" % (reconnects, MAX_RECONNECTS, downloaded, self.title))
                                 time.sleep(2)
                                 if self._cancelled:
@@ -838,23 +852,23 @@ class Downloader(object):
                                 try:
                                     new_resp = _open_mp4(downloaded)
                                 except Exception:
-                                    continue  # naechster Loop-Durchlauf zaehlt den naechsten Reconnect
-                                if new_resp.getcode() == 206:
-                                    resp = new_resp
-                                else:
-                                    # Server ignoriert Range und liefert die Datei komplett
-                                    # von vorne - Datei entsprechend zuruecksetzen.
-                                    resp = new_resp
-                                    f.seek(0)
-                                    f.truncate()
-                                    downloaded = 0
-                                continue
-                            raise
-                        consecutive_timeouts = 0
-                        if not chunk:
-                            if total and downloaded < total:
-                                raise IOError("Download unvollständig (Verbindung vorzeitig beendet)")
-                            break
+                                    new_resp = None
+                            if self._cancelled:
+                                break
+                            reconnect_pos = downloaded
+                            resp = new_resp
+                            if resp.getcode() != 206:
+                                # Server ignoriert Range: mit der vollstaendigen
+                                # Antwort neu beginnen, statt Daten doppelt anzuhängen.
+                                f.seek(0)
+                                f.truncate()
+                                downloaded = 0
+                                reconnect_pos = 0
+                            continue
+                        if reconnects and downloaded - reconnect_pos >= 4 * 1024 * 1024:
+                            # Nach stabiler Verbindung gelegentliche Aussetzer
+                            # nicht ueber den ganzen Download aufsummieren.
+                            reconnects = 0
                         f.write(chunk)
                         downloaded += len(chunk)
                         self._downloaded = downloaded

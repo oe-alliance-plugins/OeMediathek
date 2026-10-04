@@ -246,9 +246,53 @@ def _has_serviceapp():
     return os.path.exists("/usr/lib/enigma2/python/Plugins/SystemPlugins/ServiceApp")
 
 
+_NEW_EXTEPLAYER3 = None
+
+
+def _detect_new_exteplayer3():
+    if os.path.isdir("/usr/lib/exteplayer3_deps"):
+        return True
+    # Andere Images haben den Lib-Ordner nicht. Ab v181 meldet exteplayer3
+    # beim Aufruf ohne Argumente seine Version und beendet sich danach.
+    try:
+        import subprocess
+        proc = subprocess.Popen(["exteplayer3"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        chunks = []
+
+        def _read():
+            try:
+                # communicate schliesst die Pipe und wartet den beendeten Prozess ab.
+                data = proc.communicate()[0]
+                chunks.append(_to_text(data))
+            except Exception:
+                pass
+
+        # Auch ein Kindprozess kann die Pipe offen halten. Nur im Daemon-Thread
+        # lesen, damit die Erkennung nach spaetestens zwei Sekunden zurueckkehrt.
+        reader = threading.Thread(target=_read)
+        reader.daemon = True
+        reader.start()
+        reader.join(2.0)
+        if reader.is_alive():
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return False
+        out = "".join(chunks)
+        match = re.search(r'"EPLAYER3_EXTENDED"\s*:\s*\{\s*"version"\s*:\s*(\d+)', out)
+        return bool(match and int(match.group(1)) >= 181)
+    except Exception:
+        return False
+
+
 def _has_new_exteplayer3():
-    """exteplayer3 >= v181 (feedplus) bringt eigene Libs in /usr/lib/exteplayer3_deps/."""
-    return os.path.isdir("/usr/lib/exteplayer3_deps")
+    """Erkennt exteplayer3 >= v181 am Lib-Ordner oder an seiner Versionsausgabe."""
+    global _NEW_EXTEPLAYER3
+    if _NEW_EXTEPLAYER3 is None:
+        _NEW_EXTEPLAYER3 = _detect_new_exteplayer3()
+        _log("exteplayer3 >= v181 erkannt: " + str(_NEW_EXTEPLAYER3))
+    return _NEW_EXTEPLAYER3
 
 
 # Felder, die _configure_serviceapp_for_live() live-tunt und die deshalb vor
