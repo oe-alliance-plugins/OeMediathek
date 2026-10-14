@@ -1,30 +1,42 @@
 # -*- coding: utf-8 -*-
 # plugin.py
 
-import io
-import os
-import threading
-import time
+from io import open as ioOpen
+from os import listdir, makedirs, remove
+from os.path import dirname, exists, isdir, join
+from re import search, sub
+from threading import Thread, Timer
+from time import time
 from urllib.error import HTTPError
 from urllib.parse import urlparse as _urlparse
 from urllib.request import Request, urlopen
+from twisted.internet import reactor
+
+from enigma import ePoint, eServiceReference, eSize, eTimer, getDesktop
+
+from Components.ActionMap import ActionMap
+from Components.Label import Label
+from Components.ScrollLabel import ScrollLabel
+from Plugins.Plugin import PluginDescriptor
+from Screens.MessageBox import MessageBox as _MessageBox
+from Screens.Screen import Screen
+from Screens.VirtualKeyBoard import VirtualKeyBoard
+
+from .display import LcdIconSummaryMixin, displayHelper
+from .download_manager import OeMediathekDownloadManagerScreen
+from .downloader import Downloader, convert_mp4_to_ts, get_auto_convert, get_content_length, get_debug_logging, get_download_extra_info_label, get_download_quality, get_download_quality_label, get_download_subfolder, get_force_exteplayer, get_live_tv_background, get_save_dir, get_serviceapp_autoconfigure, get_stream_quality, get_stream_quality_label, get_tile_wrap_lr, set_auto_convert, set_debug_logging, set_download_extra_info, set_download_quality, set_download_subfolder, set_force_exteplayer, set_live_tv_background, set_save_dir, set_serviceapp_autoconfigure, set_stream_quality, set_tile_wrap_lr
+from .mediathek import _mvw_query, add_episode_favorite, add_favorite, get_3sat_highlights, get_all_highlights, get_ard_alpha_highlights, get_ard_highlights, get_arte_highlights, get_br_highlights, get_dw_highlights, get_episode_favorites, get_favorites, get_funk_highlights, get_hr_highlights, get_kika_highlights, get_mdr_highlights, get_ndr_highlights, get_one_highlights, get_orf_highlights, get_phoenix_highlights, get_radio_bremen_highlights, get_rbb_highlights, get_sr_highlights, get_srf_highlights, get_swr_highlights, get_tagesschau24_highlights, get_topics, get_wdr_highlights, get_zdf_highlights, get_zdf_uhd_no_hdr_topics, get_zdf_uhd_shows, get_zdf_uhd_static_episodes, get_zdf_uhd_static_topics, get_zdf_uhd_topic_episodes, get_zdf_uhd_topic_quality, get_zdfinfo_highlights, get_zdfneo_highlights, is_episode_favorite, is_favorite, is_watched, load_search_history, refresh_uhd_static, remove_episode_favorite, remove_favorite, reorder_favorites, resolve_uhd_url, resolve_uhd_url_via_document_api, save_search_history, toggle_watched, uhd_url_candidates
+from .player import _self_heal_all_serviceapp_backups, black_background_ref, play_stream_async
 
 try:
-    import traceback
+    from traceback import format_exc
 
     def _fmt_exc():
-        return traceback.format_exc()
+        return format_exc()
 except ImportError:
     def _fmt_exc():
         return "(traceback nicht verfügbar)"
 
-from Plugins.Plugin import PluginDescriptor
-from Screens.Screen import Screen
-from Screens.VirtualKeyBoard import VirtualKeyBoard
-from Components.ActionMap import ActionMap
-from Components.Label import Label
-from Components.ScrollLabel import ScrollLabel
-from enigma import eTimer, ePoint, eSize, getDesktop, eServiceReference
 
 try:
     from Components.Pixmap import Pixmap as _Pixmap
@@ -36,64 +48,8 @@ try:
 except ImportError:
     _LoadPixmap = None
 
-from .mediathek import (
-    get_all_highlights,
-    get_ard_highlights,
-    get_zdf_highlights,
-    get_arte_highlights,
-    get_3sat_highlights,
-    get_ndr_highlights,
-    get_wdr_highlights,
-    get_br_highlights,
-    get_mdr_highlights,
-    get_hr_highlights,
-    get_swr_highlights,
-    get_rbb_highlights,
-    get_sr_highlights,
-    get_zdfinfo_highlights,
-    get_zdfneo_highlights,
-    get_kika_highlights,
-    get_phoenix_highlights,
-    get_radio_bremen_highlights,
-    get_funk_highlights,
-    get_ard_alpha_highlights,
-    get_one_highlights,
-    get_tagesschau24_highlights,
-    get_dw_highlights,
-    get_orf_highlights,
-    get_srf_highlights,
-    get_favorites,
-    add_favorite,
-    remove_favorite,
-    is_favorite,
-    reorder_favorites,
-    is_watched,
-    toggle_watched,
-    is_episode_favorite,
-    add_episode_favorite,
-    remove_episode_favorite,
-    get_episode_favorites,
-    _mvw_query,
-    get_topics,
-    load_search_history,
-    save_search_history,
-    get_zdf_uhd_shows,
-    get_zdf_uhd_topic_episodes,
-    get_zdf_uhd_static_topics,
-    get_zdf_uhd_static_episodes,
-    get_zdf_uhd_topic_quality,
-    get_zdf_uhd_no_hdr_topics,
-    refresh_uhd_static,
-    uhd_url_candidates,
-    resolve_uhd_url,
-    resolve_uhd_url_via_document_api,
-)
-from .player import play_stream_async, black_background_ref, _self_heal_all_serviceapp_backups
-from .downloader import Downloader, get_save_dir, set_save_dir, get_content_length, get_auto_convert, set_auto_convert, convert_mp4_to_ts, get_tile_wrap_lr, set_tile_wrap_lr, get_serviceapp_autoconfigure, set_serviceapp_autoconfigure, get_debug_logging, set_debug_logging, get_force_exteplayer, set_force_exteplayer, get_download_quality, set_download_quality, get_download_quality_label, get_stream_quality, set_stream_quality, get_stream_quality_label, set_download_extra_info, get_download_extra_info_label, get_live_tv_background, set_live_tv_background, get_download_subfolder, set_download_subfolder
-from .download_manager import OeMediathekDownloadManagerScreen
-from Screens.MessageBox import MessageBox as _MessageBox  # für Download-Notification
 
-LOGO_DIR = os.path.join(os.path.dirname(__file__), "logos")
+LOGO_DIR = join(dirname(__file__), "logos")
 
 
 _notify_title_timers = []
@@ -116,7 +72,7 @@ _AZ_CH_MAP = {
 
 try:
     import xml.etree.ElementTree as _ET
-    _meta = _ET.parse(os.path.join(os.path.dirname(__file__), "meta.xml"))
+    _meta = _ET.parse(join(dirname(__file__), "meta.xml"))
     PLUGIN_VERSION = _meta.findtext("version") or "?"
 except Exception:
     PLUGIN_VERSION = "?"
@@ -212,9 +168,9 @@ def _log(msg):
     line = "[OeMediathek %s] %s" % (_time.strftime("%H:%M:%S", _time.localtime()), str(msg))
     print(line)
     try:
-        if not os.path.isdir(_TMP_DIR):
-            os.makedirs(_TMP_DIR)
-        with io.open(LOG_FILE, "a", encoding="utf-8") as f:
+        if not isdir(_TMP_DIR):
+            makedirs(_TMP_DIR)
+        with ioOpen(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
         pass
@@ -749,8 +705,7 @@ def _parse_season_episode(title):
     ZDF-Sondersendungen ohne echte Staffelstruktur (z.B. "Terra X"-Jahres-
     rueckblicke) nutzen "(S2025/E07)" mit dem Jahr statt einer Staffelnummer.
     Echte Staffeln erreichen praktisch nie vierstellige Werte."""
-    import re
-    m = re.search(r'\(S(\d+)/E(\d+)\)', title)
+    m = search(r'\(S(\d+)/E(\d+)\)', title)
     if m:
         season = int(m.group(1))
         if season >= 1000:
@@ -761,14 +716,13 @@ def _parse_season_episode(title):
 
 def _download_title(title, season=None, episode=None):
     """Setzt SxxEyy vor den Download-Titel und liefert nativen Python-3-Text."""
-    import re
     text = _u(title)
     try:
         if season is None or episode is None:
             season, episode = _parse_season_episode(text)
         if season is None or episode is None:
             return text
-        clean = re.sub(r'\s*\(S\d+/E\d+\)', '', text).strip()
+        clean = sub(r'\s*\(S\d+/E\d+\)', '', text).strip()
         return "S%02dE%02d %s" % (int(season), int(episode), clean)
     except Exception:
         return text
@@ -794,6 +748,26 @@ def _effective_season(item):
     return season
 
 
+class DownloadHelper:
+	def episodeOrderKey(self, item, defaultIndex=0):
+		season = _effective_season(item)
+		episode = item.get("episode")
+		if episode is None:
+			_, episode = _parse_season_episode(_u(item.get("title", "")))
+		try:
+			episode = int(episode) if episode is not None else None
+		except (TypeError, ValueError):
+			episode = None
+		if season is not None and episode is not None:
+			return (0, season, episode)
+		if season is not None:
+			return (1, season, defaultIndex)
+		return (2, defaultIndex, 0)
+
+
+downloadHelper = DownloadHelper()
+
+
 def _episode_label(title_bytes, topic_bytes=None, watched=False, season=None, episode=None):
     """
     Gibt einen Listeneintrag zurueck. Falls der Titel (SXX/EYY) enthaelt,
@@ -805,22 +779,21 @@ def _episode_label(title_bytes, topic_bytes=None, watched=False, season=None, ep
     ZDF Document API, siehe [[project_zdf_uhd]]), werden diese statt der
     Regex-Erkennung aus dem Titeltext verwendet.
     """
-    import re
     title = _u(title_bytes)
     if season is not None and episode is not None:
         label = "S%02dE%02d  %s" % (int(season), int(episode), title.strip())
     else:
         s, e = _parse_season_episode(title)
         if s is not None:
-            clean = re.sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
+            clean = sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
             label = "S%02dE%02d  %s" % (s, e, clean)
         else:
             # "Folge" ist Pflicht, nicht optional: sonst matcht z.B. WDRs Titel-Konvention
             # "Titel | 18.08.2026" faelschlich als "Folge 18" (Tag des Datums).
-            m2 = re.search(r'\|\s*Folge\s+(\d+)', title)
+            m2 = search(r'\|\s*Folge\s+(\d+)', title)
             if m2:
                 folge = int(m2.group(1))
-                clean = re.sub(r'\s*\xb7.*$', '', title).strip()
+                clean = sub(r'\s*\xb7.*$', '', title).strip()
                 label = "F%04d  %s" % (folge, clean)
             else:
                 label = title
@@ -846,9 +819,9 @@ def _sanitize_folder_name(value):
 def _show_target_dir(name):
     """Erstellt den Sendungs-Unterordner und liefert (Pfad, Ordnername)."""
     folder = _sanitize_folder_name(name)
-    target_dir = os.path.join(_u(get_save_dir()), folder)
+    target_dir = join(_u(get_save_dir()), folder)
     try:
-        os.makedirs(target_dir, exist_ok=True)
+        makedirs(target_dir, exist_ok=True)
     except Exception:
         target_dir = None
     return target_dir, folder
@@ -1002,7 +975,7 @@ _ALPHA_X0 = ((1920 - _ALPHA_COLS * _ALPHA_CW) // 2) if IS_FHD else ((1280 - _ALP
 _ALPHA_Y0 = ((1080 - _ALPHA_ROWS * _ALPHA_CH) // 2 + 20) if IS_FHD else ((720 - _ALPHA_ROWS * _ALPHA_CH) // 2 + 13)
 
 
-class OeMediathekAlphaPickerScreen(Screen):
+class OeMediathekAlphaPickerScreen(LcdIconSummaryMixin, Screen):
 
     def _make_skin(self):
         cells = ""
@@ -1140,7 +1113,7 @@ class OeMediathekAlphaPickerScreen(Screen):
 # ------------------------------------------------------------------
 # Info-Screen (Zeigt Details und Laufzeit zu einer Episode als Popup)
 # ------------------------------------------------------------------
-class OeMediathekInfoScreen(Screen):
+class OeMediathekInfoScreen(LcdIconSummaryMixin, Screen):
 
     @staticmethod
     def _make_skin():
@@ -1354,7 +1327,7 @@ def _queue_error(msg):
         _oem_retry_state["token"] += 1
         token = _oem_retry_state["token"]
         _oem_retry_state["waiting"] = True
-        _oem_retry_state["until"] = time.time() + delay
+        _oem_retry_state["until"] = time() + delay
         _oem_retry_state["attempt"] = retry
         _oem_retry_state["message"] = "Download fehlgeschlagen, neuer Versuch in %d Sekunden." % delay
 
@@ -1364,7 +1337,7 @@ def _queue_error(msg):
                 _oem_retry_state["until"] = 0
                 _oem_retry_state["message"] = "Automatischer Retry wird gestartet ..."
                 _queue_next()
-        timer = threading.Timer(delay, _retry_later)
+        timer = Timer(delay, _retry_later)
         timer.daemon = True
         timer.start()
         return
@@ -1389,7 +1362,7 @@ def _oem_queue_size_probe(item):
             pass
         item["_oem_size"] = size
         item["_oem_size_ready"] = True
-    t = threading.Thread(target=worker)
+    t = Thread(target=worker)
     t.daemon = True
     t.start()
 
@@ -1478,7 +1451,7 @@ def _notify_downloads_done():
 # ------------------------------------------------------------------
 # Hauptmenü – Vollbild-Kachelansicht mit Logos (Card Layout)
 # ------------------------------------------------------------------
-class OeMediathekMainScreen(Screen):
+class OeMediathekMainScreen(LcdIconSummaryMixin, Screen):
 
     _MAX_PAGE_DOTS = 8  # grosszuegiger Puffer, aktuell 3 Seiten (29 Sender / 12 pro Seite)
 
@@ -1835,8 +1808,8 @@ class OeMediathekMainScreen(Screen):
             _, _, logo = SOURCES[src_idx]
             if not logo:
                 continue
-            path = os.path.join(LOGO_DIR, logo)
-            if not os.path.exists(path):
+            path = join(LOGO_DIR, logo)
+            if not exists(path):
                 _log("Logo fehlt: " + path)
                 continue
             try:
@@ -1904,7 +1877,7 @@ class OeMediathekMainScreen(Screen):
         try:
             import json as _json
             order = [s[0] for s in SOURCES]
-            with io.open(OeMediathekMainScreen._ORDER_FILE, "w", encoding="utf-8") as f:
+            with ioOpen(OeMediathekMainScreen._ORDER_FILE, "w", encoding="utf-8") as f:
                 _json.dump(order, f)
             _log("Reihenfolge gespeichert")
         except Exception as e:
@@ -1915,9 +1888,9 @@ class OeMediathekMainScreen(Screen):
         """Gespeicherte Reihenfolge auf SOURCES anwenden (beim Start aufrufen)."""
         try:
             import json as _json
-            if not os.path.exists(OeMediathekMainScreen._ORDER_FILE):
+            if not exists(OeMediathekMainScreen._ORDER_FILE):
                 return
-            with io.open(OeMediathekMainScreen._ORDER_FILE, "r", encoding="utf-8") as f:
+            with ioOpen(OeMediathekMainScreen._ORDER_FILE, "r", encoding="utf-8") as f:
                 order = _json.load(f)
             name_to_src = {s[0]: s for s in SOURCES}
             reordered = []
@@ -2145,7 +2118,7 @@ class OeMediathekMainScreen(Screen):
 # ------------------------------------------------------------------
 # Suchverlauf-Screen  (Vorschalt-Dialog vor der Tastatur)
 # ------------------------------------------------------------------
-class OeMediathekSearchHistoryScreen(_CustomListMixin, Screen):
+class OeMediathekSearchHistoryScreen(LcdIconSummaryMixin, _CustomListMixin, Screen):
 
     _CL_ROWS = _SH_LIST_ROWS
     _NEW_SEARCH = ">> Neue Suche..."
@@ -2288,7 +2261,7 @@ class OeMediathekSearchHistoryScreen(_CustomListMixin, Screen):
         history = load_search_history()
         history = [e for e in history if e != text]
         try:
-            with io.open(SEARCH_HISTORY_FILE, "w", encoding="utf-8") as f:
+            with ioOpen(SEARCH_HISTORY_FILE, "w", encoding="utf-8") as f:
                 _json.dump(history, f, ensure_ascii=False)
         except Exception:
             pass
@@ -2308,7 +2281,7 @@ class OeMediathekSearchHistoryScreen(_CustomListMixin, Screen):
 # Generisches Auswahl-Popup  (Datum, Qualität, …)
 # ------------------------------------------------------------------
 
-class OeMediathekPickerScreen(_CustomListMixin, Screen):
+class OeMediathekPickerScreen(LcdIconSummaryMixin, _CustomListMixin, Screen):
     """Auswahl-Popup — Panel-Höhe passt sich automatisch der Eintragsanzahl an."""
 
     _CL_ROWS = 8  # Klassenwert, wird pro Instanz überschrieben
@@ -2535,7 +2508,7 @@ def _check_stream_status(url, callback):
             reactor.callFromThread(callback, code)
         except Exception:
             pass
-    t = threading.Thread(target=worker)
+    t = Thread(target=worker)
     t.daemon = True
     t.start()
 
@@ -2547,10 +2520,10 @@ def _load_group_state(order_file, groups):
     """Gespeicherten Ansichtsmodus + User-Reihenfolge laden.
     Gibt (mode, order_liste_oder_None) zurueck. mode ist 'az' oder 'user'."""
     try:
-        if not os.path.exists(order_file):
+        if not exists(order_file):
             return "az", None
         import json as _json
-        with io.open(order_file, "r", encoding="utf-8") as f:
+        with ioOpen(order_file, "r", encoding="utf-8") as f:
             data = _json.load(f)
         mode = data.get("mode", "az") if isinstance(data, dict) else "az"
         order = data.get("order", []) if isinstance(data, dict) else []
@@ -2583,7 +2556,7 @@ def _save_group_state(order_file, mode, groups):
 # ------------------------------------------------------------------
 # Live-Streams-Screen  (flache Liste aller Sender-Livestreams)
 # ------------------------------------------------------------------
-class OeMediathekLivestreamScreen(_CustomListMixin, Screen):
+class OeMediathekLivestreamScreen(LcdIconSummaryMixin, _CustomListMixin, Screen):
 
     _CL_ROWS = _LIST_ROWS
     _ORDER_FILE = "/etc/enigma2/oemediathek_livestream_order.json"
@@ -2952,7 +2925,7 @@ class OeMediathekLivestreamScreen(_CustomListMixin, Screen):
             pass
 
 
-class OeMediathekLiveScreen(_CustomListMixin, Screen):
+class OeMediathekLiveScreen(LcdIconSummaryMixin, _CustomListMixin, Screen):
 
     _CL_ROWS = _LIST_ROWS
     _ORDER_FILE = "/etc/enigma2/oemediathek_live_event_order.json"
@@ -3404,2359 +3377,2352 @@ class OeMediathekLiveScreen(_CustomListMixin, Screen):
 # ------------------------------------------------------------------
 # Inhalts-Screen  (Split-Screen Card Layout mit Deep-Fetch)
 # ------------------------------------------------------------------
-class OeMediathekScreen(Screen):
-
-    @staticmethod
-    def _make_skin():
-        if IS_FHD:
-            lx, ly0, lw, rh, rf = 40, 150, 1080, 58, 34
-            dw, dh, dx_off, dy_off, dl_off, label_off = 28, 24, 12, 17, 44, 80
-        else:
-            lx, ly0, lw, rh, rf = 36, 97, 720, 38, 22
-            dw, dh, dx_off, dy_off, dl_off, label_off = 18, 16, 8, 11, 30, 54
-
-        list_xml = ""
-        for i in range(_LIST_ROWS):
-            y = ly0 + i * rh
-            list_xml += (
-                '<widget name="list_sel_{i}" position="{x},{y}" size="{w},{rh}" '
-                'backgroundColor="#00253850" zPosition="1" transparent="0"/>'
-                '<widget name="list_dot_{i}" position="{dx},{dy}" size="{dw},{dh}" '
-                'alphatest="blend" scale="1" zPosition="3" transparent="1"/>'
-                '<widget name="list_dl_{i}" position="{dlx},{dy}" size="{dw},{dh}" '
-                'alphatest="blend" scale="1" zPosition="3" transparent="1"/>'
-                '<widget name="list_label_{i}" position="{lbx},{y}" size="{lbw},{rh}" '
-                'zPosition="2" font="Regular;{rf}" halign="left" valign="center" '
-                'foregroundColor="#CCCCCC" backgroundColor="#33000000" transparent="1" noWrap="1"/>'
-            ).format(i=i, x=lx, y=y, w=lw,
-                     dx=lx + dx_off, dlx=lx + dl_off, dy=y + dy_off, dw=dw, dh=dh,
-                     lbx=lx + label_off, lbw=lw - label_off, rh=rh, rf=rf)
-
-        if IS_FHD:
-            return (
-                '<screen name="OeMediathekScreen" position="0,0" size="1920,1080" flags="wfNoBorder">'
-                '<eLabel position="0,0" size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>'
-                '<eLabel position="30,30" size="1860,80" backgroundColor="#33000000" zPosition="-5"/>'
-                '<widget name="title_label" position="50,30" size="850,80" font="Regular;42" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
-                '<widget name="sort_label" position="910,30" size="220,80" font="Regular;28" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
-                '<widget name="status_label" position="1140,30" size="690,80" font="Regular;28" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
-                '<eLabel position="30,140" size="1100,780" backgroundColor="#33000000" zPosition="-5"/>'
-                + list_xml +
-                '<widget name="scrollbar_track" position="1142,150" size="6,754" backgroundColor="#1AFFFFFF" zPosition="1"/>'
-                '<widget name="scrollbar_thumb" position="1142,150" size="6,58" backgroundColor="#00253850" zPosition="2"/>'
-                '<eLabel position="1160,140" size="730,780" backgroundColor="#33000000" zPosition="-5"/>'
-                '<widget name="description_text" position="1190,160" size="670,740" font="Regular;34" foregroundColor="#CCCCCC" backgroundColor="#33000000" valign="top" halign="left" transparent="1"/>'
-                '<eLabel position="30,960" size="1860,100" backgroundColor="#1A000000" zPosition="-5"/>'
-                '<eLabel position="50,980" size="8,60" backgroundColor="#1AEE0000" zPosition="2"/>'
-                '<widget name="hint_red" position="68,965" size="350,45" font="Regular;30" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_menu" position="68,1010" size="350,40" font="Regular;22" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="450,980" size="8,60" backgroundColor="#1A00AA00" zPosition="2"/>'
-                '<widget name="hint_green" position="468,960" size="300,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="808,980" size="8,60" backgroundColor="#1AAAAA00" zPosition="2"/>'
-                '<widget name="hint_yellow" position="826,960" size="292,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="1158,980" size="8,60" backgroundColor="#1A0044DD" zPosition="2"/>'
-                '<widget name="hint_blue" position="1176,960" size="242,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_info" position="1468,960" size="220,100" font="Regular;26" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_page" position="1698,960" size="172,100" font="Regular;32" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
-                '</screen>'
-            )
-        else:
-            return (
-                '<screen name="OeMediathekScreen" position="0,0" size="1280,720" flags="wfNoBorder">'
-                '<eLabel position="0,0" size="1280,720" backgroundColor="#66000000" zPosition="-6"/>'
-                '<eLabel position="30,20" size="1220,53" backgroundColor="#33000000" zPosition="-5"/>'
-                '<widget name="title_label" position="43,20" size="560,53" font="Regular;28" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
-                '<widget name="sort_label" position="610,20" size="147,53" font="Regular;18" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
-                '<widget name="status_label" position="760,20" size="460,53" font="Regular;18" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
-                '<eLabel position="30,90" size="733,524" backgroundColor="#33000000" zPosition="-5"/>'
-                + list_xml +
-                '<widget name="scrollbar_track" position="766,97" size="4,494" backgroundColor="#1AFFFFFF" zPosition="1"/>'
-                '<widget name="scrollbar_thumb" position="766,97" size="4,38" backgroundColor="#00253850" zPosition="2"/>'
-                '<eLabel position="773,90" size="477,524" backgroundColor="#33000000" zPosition="-5"/>'
-                '<widget name="description_text" position="790,103" size="443,504" font="Regular;22" foregroundColor="#CCCCCC" backgroundColor="#33000000" valign="top" halign="left" transparent="1"/>'
-                '<eLabel position="30,634" size="1220,60" backgroundColor="#1A000000" zPosition="-5"/>'
-                '<eLabel position="33,649" size="5,30" backgroundColor="#1AEE0000" zPosition="2"/>'
-                '<widget name="hint_red" position="42,636" size="233,28" font="Regular;20" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_menu" position="42,664" size="233,26" font="Regular;15" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="300,649" size="5,30" backgroundColor="#1A00AA00" zPosition="2"/>'
-                '<widget name="hint_green" position="309,634" size="200,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="539,649" size="5,30" backgroundColor="#1AAAAA00" zPosition="2"/>'
-                '<widget name="hint_yellow" position="548,634" size="195,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="772,649" size="5,30" backgroundColor="#1A0044DD" zPosition="2"/>'
-                '<widget name="hint_blue" position="781,634" size="161,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_info" position="978,634" size="147,60" font="Regular;17" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_page" position="1132,634" size="118,60" font="Regular;21" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
-                '</screen>'
-            )
-
-    def __init__(self, session, source_name, loader, force_uhd=False, zdf_uhd_static=False):
-        self.skin = self._make_skin()
-        _log("ContentScreen init: " + source_name)
-        Screen.__init__(self, session)
-        self.session = session
-        self.source_name = source_name
-        self.loader = loader
-        self.force_uhd = force_uhd
-        self.zdf_uhd_static = zdf_uhd_static
-
-        self.page = 0
-        self.mode = MODE_GROUPS
-        self._has_more = True
-        self.all_items = []
-        self.groups = []
-        self.groups_filtered = []
-        self.cur_episodes = []
-        self.cur_group_name = ""
-        self.ep_page = 0
-        self.ep_total = 0
-        self.ep_has_more = False
-
-        self.current_search = None
-        self.min_duration = 0
-        self.sort_mode = "timestamp"
-        self._sv_mode = False   # True = Sendung-verpasst?-Filter aktiv
-        self._sv_sn_items = []  # gefilterte Items des aktiven Datumsfilters
-        self._sv_sn_pending = None
-        self._fav_sort_mode = False  # True = Favoriten-Sortiermodus aktiv
-        self._fav_grabbed = None  # Index des gegriffenen Favoriten
-        self._fav_order_backup = None  # Backup der Reihenfolge vor dem Sortieren
-        self._fav_show_episodes = False      # True = Episode-Favoriten-Ansicht aktiv
-        self._fav_allow_auto_switch = True   # False = User hat explizit Gruppen-Ansicht gewählt
-        self._ep_fav_sort_mode = False   # True = Sortiermodus in Episode-Favoriten
-        self._ep_fav_grabbed = None    # Index des gegriffenen Episode-Favoriten
-        self._ep_fav_order_backup = None  # Backup der Reihenfolge
-        self._ep_sort_mode = "timestamp"  # Sortierung in Episodenansicht
-        self._ep_api_has_more = False  # API hat noch Daten nach letztem Episoden-Fetch
-        self._ep_next_api_offset = 0  # Naechster API-Offset fuer Episoden-Paging
-        self._sn_mode = False   # True = Demnächst-Filter aktiv
-        self._sv_sn_date_str = ""
-
-        self._az_topics_cache = None
-
-        self._fetching = False
-        self._loaded = False   # False bis erster Fetch abgeschlossen
-        self._fetch_target = "groups"
-        self._fetch_result = []
-        self._fetch_episodes_result = []
-        self._fetch_alpha_result = []
-        self._fetch_total = 0
-        self._fetch_error = None
-        self._paged_total = 0   # _fetch_total des letzten normalen (paginieren) Fetches
-        self._paged_has_more = False
-        self._groups_next_api_offset = 0  # Naechster API-Offset fuer Gruppen-Paging
-
-        self.last_index = -1
-        self.cur_group_idx = -1
-        self.cur_group_scroll = 0
-        self.alpha_letter = None
-
-        self["title_label"] = Label(source_name)
-        self["status_label"] = Label("Lade Inhalte ...")
-        self["description_text"] = ScrollLabel(_b(""))
-
-        self._list_items = []
-        self._list_sel = 0
-        self._list_scroll = 0
-        self._dot_pix = None
-        self._fav_pix = None
-        self._dl_pix = None
-        for i in range(_LIST_ROWS):
-            self["list_sel_%d" % i] = Label(_b(""))
-            self["list_label_%d" % i] = Label(_b(""))
-            try:
-                self["list_dot_%d" % i] = _Pixmap() if _Pixmap else Label(_b(""))
-            except Exception:
-                self["list_dot_%d" % i] = Label(_b(""))
-            try:
-                self["list_dl_%d" % i] = _Pixmap() if _Pixmap else Label(_b(""))
-            except Exception:
-                self["list_dl_%d" % i] = Label(_b(""))
-            self["list_sel_%d" % i].hide()
-            self["list_label_%d" % i].hide()
-            self["list_dot_%d" % i].hide()
-            self["list_dl_%d" % i].hide()
-        self["scrollbar_track"] = Label(_b(""))
-        self["scrollbar_thumb"] = Label(_b(""))
-        self["scrollbar_track"].hide()
-        self["scrollbar_thumb"].hide()
-
-        self["sort_label"] = Label("")
-        self["hint_red"] = Label("")
-        self["hint_menu"] = Label("")
-        self["hint_green"] = Label("")
-        self["hint_yellow"] = Label("")
-        self["hint_blue"] = Label("")
-        self["hint_info"] = Label("")
-        self["hint_page"] = Label("")
-
-        self["actions"] = ActionMap(
-            ["OkCancelActions", "ColorActions", "DirectionActions",
-             "ChannelSelectBaseActions", "ListboxActions"],
-            {
-                "ok": self.on_ok,
-                "cancel": self.on_cancel,
-                "red": self.on_red,
-                "green": self.on_green,
-                "yellow": self.on_yellow,
-                "blue": self.on_blue,
-                "nextBouquet": self.next_page,
-                "prevBouquet": self.prev_page,
-                "up": self.on_up,
-                "upRepeated": self.on_up,
-                "down": self.on_down,
-                "downRepeated": self.on_down,
-                "left": self.on_page_up,
-                "right": self.on_page_down,
-                "pageUp": self.on_page_up,
-                "pageDown": self.on_page_down,
-            },
-            -1,
-        )
-        # Eigene ActionMap fuer EPGSelectActions: manche Images (z.B. OpenATV)
-        # binden KEY_RED/YELLOW/BLUE dort zusaetzlich auf "red"/"yellow"/"blue"
-        # (mit anderem make/break-Flag als ColorActions) -> waere die Aktion
-        # im selben Dict gebunden, wuerde ein einzelner Tastendruck den
-        # Handler zweimal feuern (einmal beim Druecken, einmal beim
-        # Loslassen). Deshalb hier nur die tatsaechlich benoetigten Aktionen.
-        self["actions_epg"] = ActionMap(
-            ["EPGSelectActions"],
-            {
-                "info": self.on_info,
-                "epg": self.on_info,
-                "nextBouquet": self.next_page,
-                "prevBouquet": self.prev_page,
-            },
-            -1,
-        )
-        # Eigene ActionMap fuer MenuActions: KEY_MENU ist in diesem Screen
-        # bisher ungenutzt, "menu" (Make-Flag) ist auf VTi UND OpenATV im
-        # selben Kontext definiert, kein Kollisionsrisiko mit den obigen
-        # Kontexten. Bewusst nicht per Lang-Druck einer Farbtaste geloest
-        # (siehe Commit-Historie) - Break/Long-Events feuern plattform-
-        # abhaengig in unterschiedlicher Reihenfolge/zusaetzlich, MENU als
-        # eigene Taste mit reinem Make-Event ist deutlich robuster.
-        self["actions_menu"] = ActionMap(
-            ["MenuActions"],
-            {
-                "menu": self.on_download_menu,
-            },
-            -1,
-        )
-        self.onShow.append(self.__on_show)
-
-        self._start_timer = eTimer()
-        self._start_timer.callback.append(self._start_fetch)
-        self._start_timer.start(300, True)
-
-        self._poll_timer = eTimer()
-        self._poll_timer.callback.append(self._poll_fetch)
-
-        self._desc_timer = eTimer()
-        self._desc_timer.callback.append(self._update_desc)
-        self._desc_timer.start(250, False)
-
-        self._toast_timer = eTimer()
-        self._toast_timer.callback.append(self._clear_toast)
-        self._saved_status = None
-
-        self._first_desc_timer = None
-
-        self.onClose.append(self.__stop_timers)
-
-    def __on_show(self):
-        if self._dot_pix is None and _Pixmap and _LoadPixmap:
-            try:
-                import os as _os
-                _path = _os.path.join(_os.path.dirname(__file__), "mark.png")
-                self._dot_pix = _LoadPixmap(_path)
-                if self._dot_pix:
-                    for i in range(_LIST_ROWS):
-                        try:
-                            self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
-                        except Exception:
-                            pass
-            except Exception as e:
-                _log("mark.png load failed: " + str(e))
-        if self._fav_pix is None and _Pixmap and _LoadPixmap:
-            try:
-                import os as _os
-                _path = _os.path.join(_os.path.dirname(__file__), "bookmark.png")
-                self._fav_pix = _LoadPixmap(_path)
-            except Exception as e:
-                _log("bookmark.png load failed: " + str(e))
-        if self._dl_pix is None and _Pixmap and _LoadPixmap:
-            try:
-                import os as _os
-                _path = _os.path.join(_os.path.dirname(__file__), "download.png")
-                self._dl_pix = _LoadPixmap(_path)
-                if self._dl_pix:
-                    for i in range(_LIST_ROWS):
-                        try:
-                            self["list_dl_%d" % i].instance.setPixmap(self._dl_pix)
-                        except Exception:
-                            pass
-            except Exception as e:
-                _log("download.png load failed: " + str(e))
-
-    def __stop_timers(self):
-        try:
-            self._first_desc_timer.stop()
-        except Exception:
-            pass
-        for timer, cb in ((self._start_timer, self._start_fetch),
-                          (self._poll_timer, self._poll_fetch),
-                          (self._desc_timer, self._update_desc),
-                          (self._toast_timer, self._clear_toast)):
-            try:
-                if timer:
-                    timer.stop()
-                    timer.callback.remove(cb)
-            except Exception:
-                pass
-        self._start_timer = None
-        self._poll_timer = None
-        self._desc_timer = None
-        self._toast_timer = None
-        if getattr(self, "_dl_poll_timer", None):
-            try:
-                self._dl_poll_timer.stop()
-            except Exception:
-                pass
-            self._dl_poll_timer = None
-
-    def doClose(self):
-        _log("doClose")
-        self.__stop_timers()
-        try:
-            Screen.doClose(self)
-        except TypeError as e:
-            _log("doClose TypeError: " + str(e))
-
-    def _start_fetch(self):
-        if self._fetching:
-            return
-        _log("Fetch Seite %d" % self.page)
-        self._fetching = True
-        self._fetch_target = "groups"
-        self._fetch_result = []
-        self._fetch_error = None
-        self["status_label"].setText("Verbinde ...")
-        t = threading.Thread(target=self._fetch_thread)
-        t.daemon = True
-        t.start()
-        if self._poll_timer:
-            self._poll_timer.start(300, True)
-
-    def _fetch_thread(self):
-        try:
-            if self.sort_mode in ("az", "za"):
-                if self.page == 0:
-                    self._az_topics_cache = None
-                if self._az_topics_cache is None:
-                    ch = _AZ_CH_MAP.get(self.source_name)
-                    self._az_topics_cache = get_topics(channel=ch)
-                start = self.page * AZ_PAGE_SIZE
-                topics = self._az_topics_cache if self.sort_mode == "az" else self._az_topics_cache[::-1]
-                page_topics = topics[start:start + AZ_PAGE_SIZE]
-                ch_str = _AZ_CH_MAP.get(self.source_name) or ""
-                self._fetch_result = [
-                    {"group": _u(t), "title": _u(t),
-                     "channel": ch_str, "topic": _u(t)}
-                    for t in page_topics
-                ]
-                self._fetch_total = len(self._az_topics_cache)
-                self._fetch_az_has_more = (start + AZ_PAGE_SIZE) < len(self._az_topics_cache)
-            else:
-                FETCH_SIZE = PAGE_SIZE * 5
-                api_offset = self._groups_next_api_offset
-                res, total, rc = self.loader(
-                    offset=api_offset,
-                    size=FETCH_SIZE,
-                    search_term=self.current_search,
-                    min_duration=self.min_duration,
-                    sort_by=self.sort_mode,
-                )
-                self._fetch_result = res
-                self._fetch_total = total
-                self._fetch_next_api_offset = api_offset + FETCH_SIZE
-                self._fetch_last_rc_full = (rc >= FETCH_SIZE)
-        except Exception:
-            self._fetch_error = _fmt_exc()
-        self._fetching = False
-
-    def _poll_fetch(self):
-        if self._fetching:
-            if self._poll_timer:
-                self._poll_timer.start(300, True)
-            return
-
-        if self._fetch_target == "episodes":
-            self._on_episodes_fetch_done()
-        elif self._fetch_target == "alpha":
-            self._on_alpha_fetch_done()
-        elif self._fetch_target == "sv_sn_prefetch":
-            self._on_sv_sn_prefetch_done()
-        else:
-            self._on_fetch_done()
-
-    def _on_fetch_done(self):
-        if self._fetch_error:
-            _log("Fehler: " + self._fetch_error)
-            self["status_label"].setText("Fehler beim Laden!")
-            return
-
-        raw = self._fetch_result
-        _log("Fetch ok: %d Eintraege Seite %d" % (len(raw), self.page))
-
-        if not raw and self.page == 0:
-            if self.source_name != "Meine Favoriten":
-                self["status_label"].setText("Keine Inhalte gefunden.")
-                self._set_list([])
-                return
-            self.groups = []
-            self.groups_filtered = []
-            self._show_groups()
-            return
-
-        if self.sort_mode in ("az", "za"):
-            self._has_more = getattr(self, "_fetch_az_has_more", False)
-            self._paged_total = self._fetch_total
-            self._paged_has_more = self._has_more
-        else:
-            self._has_more = getattr(self, "_fetch_last_rc_full", False)
-            self._groups_next_api_offset = getattr(self, "_fetch_next_api_offset", (self.page + 1) * PAGE_SIZE)
-            self._paged_total = self._fetch_total
-            self._paged_has_more = self._has_more
-        self.all_items = raw
-
-        self.groups = _build_groups(raw, self.sort_mode)
-        self.groups_filtered = _relevance_sort(self.groups, self.current_search)
-        self.groups_filtered = _inject_direct_hits(self.groups_filtered, self.current_search)
-        self._show_groups()
-
-    def _update_desc(self):
-        global _bg_download_result
-        if _bg_download_result is not None:
-            result = _bg_download_result
-            _bg_download_result = None
-            if result == "ok":
-                self["status_label"].setText(_b("Alle Downloads abgeschlossen!"))
-            elif result == "cancelled":
-                self["status_label"].setText(_b("Downloads abgebrochen"))
-            else:
-                self._show_toast("Download fehlgeschlagen!", added=False)
-        try:
-            idx = self._get_list_index()
-            if idx is None or idx < 0:
-                return
-            if idx == self.last_index:
-                return
-            self.last_index = idx
-
-            if self._fetching or not self._loaded:
-                return
-
-            if self.mode == MODE_GROUPS:
-                self._update_red_hint()
-                self._update_blue_hint()
-                offset = self._sv_sn_offset()
-                if idx is not None and idx >= offset:
-                    real_idx = idx - offset
-                    if real_idx < len(self.groups_filtered):
-                        gname, gitems = self.groups_filtered[real_idx]
-                        try:
-                            gname_str = _u(gname)
-                        except Exception:
-                            gname_str = str(gname)
-                        import time as _time
-                        _now = _time.time()
-                        past_ts = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) <= _now]
-                        future_ts = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) > _now]
-
-                        def _fmt_ts(ts):
-                            t = _time.localtime(ts)
-                            return "%02d.%02d.%02d" % (t.tm_mday, t.tm_mon, t.tm_year % 100)
-                        lines = [gname_str]
-                        if past_ts:
-                            lines.append("Letzter Eintrag: " + _fmt_ts(max(past_ts)))
-                        if future_ts:
-                            lines.append("Nächster Termin: " + _fmt_ts(min(future_ts)))
-                        self["description_text"].setText(_b("\n".join(lines)))
-                    else:
-                        self["description_text"].setText(_b(""))
-                else:
-                    self["description_text"].setText(_b(""))
-            elif self.mode == MODE_EPISODES:
-                self._update_blue_hint()
-                self._update_info_hint()
-                self._update_ep_sort_hint()
-                if idx is not None and idx < len(self.cur_episodes):
-                    item = self.cur_episodes[idx]
-                    try:
-                        title = item["title"].decode("utf-8", "replace") if isinstance(item["title"], bytes) else item["title"]
-                    except Exception:
-                        title = str(item["title"])
-                    desc = item.get("description") or _b("Keine Beschreibung verfügbar.")
-                    dur = item.get("duration", "Unbekannt")
-                    quality = item.get("quality")
-                    if quality:
-                        bracket = _b(quality) + (_b(" · ") + _b(dur) if dur else _b(""))
-                    else:
-                        bracket = _b(dur)
-                    full_text = _b(title) + _b("\n\n[") + bracket + _b("]\n\n") + _b(desc)
-                    ts = item.get("timestamp", 0)
-                    if ts:
-                        import time as _time
-                        t = _time.localtime(ts)
-                        ts_str = "%02d.%02d.%02d %d:%02d" % (t.tm_mday, t.tm_mon, t.tm_year % 100, t.tm_hour, t.tm_min)
-                        ts_label = "Geplant" if ts > _time.time() else "Hinzugefügt"
-                        full_text = full_text + _b("\n\n" + ts_label + ": " + ts_str)
-                    self["description_text"].setText(full_text)
-        except Exception:
-            pass
-
-    def _force_first_desc(self):
-        """Einmaliger Timer-Callback: erzwingt Beschreibung nach Rendering."""
-        self.last_index = -2
-        self._update_desc()
-
-    # Sender mit zu wenigen Eintraegen fuer "Sendung verpasst?" / "Demnaechst" (< 50/Woche)
-    _NO_SN_SOURCES = frozenset([
-        "Radio Bremen", "funk", "DW", "ZDF Info", "ZDF Neo",
-        "KiKA", "tagesschau24", "ORF", "SRF",
-    ])
-
-    def _sv_sn_offset(self):
-        """Offset der echten Gruppen in der MenuList — 1 oder 2 wenn SV/SN eingeblendet, sonst 0."""
-        if self.current_search:
-            return 0
-        if self.alpha_letter:
-            return 0
-        if self.force_uhd:
-            return 0
-        if self.source_name in ("Meine Favoriten", "Alle Mediatheken"):
-            return 0
-        if self.source_name in self._NO_SN_SOURCES:
-            return 1  # nur SV
-        return 2  # SV + SN
-
-    def _show_groups(self, restore_pos=False):
-        # UHD-Direktmodus: Gruppenansicht komplett überspringen
-        if self.force_uhd and self.groups_filtered:
-            self._loaded = True
-            self._start_episode_fetch(0)
-            return
-
-        self.mode = MODE_GROUPS
-        self._loaded = True
-        self.last_index = -1
-        self._update_sort_label()
-        # Sondereinträge nur bei echten Mediatheken, nicht bei Favoriten, "Alle" oder aktiver Suche
-        offset = self._sv_sn_offset() if not self.current_search else 0
-        if offset == 2:
-            entries = [_SV_ENTRY, _SN_ENTRY]
-        elif offset == 1:
-            entries = [_SV_ENTRY]
-        else:
-            entries = []
-        for gname, gitems in self.groups_filtered:
-            # Keine Zahlen mehr in der Vorschau anhängen
-            entries.append(_b(gname))
-        self._set_list(entries)
-
-        if self._sv_mode:
-            status_text = "Sendung verpasst? — %d Sendungen" % len(self.groups_filtered)
-        elif self._sn_mode:
-            status_text = "Demnächst — %d Sendungen" % len(self.groups_filtered)
-        else:
-            status_text = "%d Sendungen" % len(self.groups_filtered)
-        if self.current_search:
-            status_text += " (Suche: %s)" % self.current_search
-        elif self.alpha_letter:
-            status_text += "  [%s]" % self.alpha_letter
-        self["status_label"].setText(_b(status_text))
-
-        # Keine Gruppen-Favoriten aber Episoden-Favoriten vorhanden → direkt wechseln.
-        # Nur wenn der User nicht explizit die Gruppen-Ansicht gewählt hat (Yellow-Button).
-        if (self.source_name == "Meine Favoriten"
-                and not self._fav_sort_mode
-                and not self.groups_filtered
-                and self._fav_allow_auto_switch
-                and get_episode_favorites()):
-            self._fav_show_episodes = True
-            self._show_episode_favorites()
-            return
-
-        if self._fav_sort_mode:
-            # Im Sortiermodus: Hints werden von _fav_update_hints gesetzt
-            self._fav_update_hints()
-        else:
-            self._update_red_hint()
-            current = self._current_sort_label()
-            next_hint = self._next_sort_hint()
-            if next_hint:
-                self["hint_green"].setText(_b(current + " > " + next_hint))
-            else:
-                self["hint_green"].setText(_b(current))
-            if self.source_name != "Meine Favoriten":
-                self["hint_yellow"].setText("Suche (Server)")
-                self._update_blue_hint()
-            else:
-                self._fav_update_hints()
-                self._update_blue_hint()
-
-        self["hint_info"].setText(_b(""))
-        self._update_page_hint()
-        pos = self.cur_group_idx if restore_pos and self.cur_group_idx is not None else 0
-        scroll = self.cur_group_scroll if restore_pos and self.cur_group_idx is not None else None
-        self._list_focus(pos, scroll=scroll)
-        self.last_index = -2
-        # Einmaliger Timer: nach 300ms nochmals erzwingen, damit VTi das Widget
-        # tatsaechlich neu zeichnet (setText direkt nach setList wird ignoriert).
-        try:
-            self._first_desc_timer.stop()
-        except Exception:
-            pass
-        self._first_desc_timer = eTimer()
-        self._first_desc_timer.callback.append(self._force_first_desc)
-        self._first_desc_timer.start(300, True)
-
-    def _prefetch_sv_sn(self, mode):
-        """Laedt bis zu 1000 Eintraege bevor SV/SN-Datepicker geoeffnet wird."""
-        SV_SN_FETCH_SIZE = 1000
-        if len(self.all_items) >= SV_SN_FETCH_SIZE:
-            # Genug Daten vorhanden
-            if mode == "sv":
-                self._open_sv_date_picker()
-            else:
-                self._open_sn_date_picker()
-            return
-        if self._fetching:
-            if self._fetch_target == "sv_sn_prefetch":
-                # Prefetch laeuft bereits — Ergebnis wird in _on_sv_sn_prefetch_done verarbeitet
-                self._sv_sn_pending = mode
-            # Anderer Fetch laeuft (z.B. Gruppen) — SV/SN erst nach Fertigstellung starten
-            return
-        self["status_label"].setText("Lade Sendungen ...")
-        self._fetching = True
-        self._fetch_target = "sv_sn_prefetch"
-        self._sv_sn_pending = mode
-        self._fetch_result = []
-        self._fetch_error = None
-        t = threading.Thread(target=self._sv_sn_prefetch_thread, args=(SV_SN_FETCH_SIZE,))
-        t.daemon = True
-        t.start()
-        if self._poll_timer:
-            self._poll_timer.start(300, True)
-
-    def _sv_sn_prefetch_thread(self, size):
-        try:
-            self._fetch_result, self._fetch_total, _rc = self.loader(
-                offset=0,
-                size=size,
-                search_term=None,
-                min_duration=0,
-                sort_by="timestamp",
-            )
-        except Exception:
-            self._fetch_error = _fmt_exc()
-        self._fetching = False
-
-    def _on_sv_sn_prefetch_done(self):
-        if self._fetch_error:
-            _log("SV/SN Prefetch Fehler: " + self._fetch_error)
-            self["status_label"].setText("Fehler beim Laden!")
-            return
-        self.all_items = self._fetch_result
-        self.groups = _build_groups(self.all_items, self.sort_mode)
-        self.groups_filtered = list(self.groups)
-        self._show_groups()
-        if getattr(self, "_sv_sn_pending", None) == "sv":
-            self._open_sv_date_picker()
-        else:
-            self._open_sn_date_picker()
-
-    def _open_sv_date_picker(self):
-        import time as _time
-        _WEEKDAYS = [
-            "Montag", "Dienstag", "Mittwoch", "Donnerstag",
-            "Freitag", "Samstag", "Sonntag",
-        ]
-        choices = []
-        now = _time.localtime()
-        # Mitternacht des heutigen Tages als Ankerpunkt — vermeidet Sommerzeit-Fehler
-        today_midnight = int(_time.mktime((now.tm_year, now.tm_mon, now.tm_mday, 0, 0, 0, 0, 0, -1)))
-        all_items = getattr(self, "all_items", []) or []
-        for i in range(8):
-            day_ts = today_midnight - i * 86400
-            t = _time.localtime(day_ts)
-            ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
-            dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
-            start_ts = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
-            end_ts = start_ts + 86399
-            count = sum(1 for item in all_items
-                        if start_ts <= item.get("timestamp", 0) <= end_ts)
-            if i == 0:
-                label = _b("Heute (%s) - %d" % (dsp, count))
-            elif i == 1:
-                label = _b("Gestern (%s) - %d" % (dsp, count))
-            else:
-                wd = _WEEKDAYS[t.tm_wday]
-                label = wd + _b(" (%s) - %d" % (dsp, count))
-            choices.append((label, ds))
-        self.session.openWithCallback(
-            self._on_sv_date_chosen,
-            OeMediathekPickerScreen,
-            title="Sendung verpasst? — Datum wählen:",
-            choices=choices,
-        )
-
-    def _on_sv_date_chosen(self, date_str):
-        if not date_str:
-            return
-        try:
-            import time as _time
-            parts = date_str.split("-")
-            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-            # Mitternacht bis 23:59:59 in der Lokalzeit der Box
-            start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
-            end_ts = start_ts + 86399
-        except Exception:
-            self["status_label"].setText(_b("Datum ungueltig!"))
-            return
-
-        filtered = [item for item in self.all_items
-                    if start_ts <= item.get("timestamp", 0) <= end_ts]
-
-        self._sv_mode = True
-        self._sv_sn_items = filtered
-        if not filtered:
-            self.groups_filtered = []
-            self._show_groups()
-            self["status_label"].setText(_b("Keine Sendungen am %s" % date_str))
-            return
-
-        self._show_sv_sn_flat(date_str)
-
-    def _open_sn_date_picker(self):
-        import time as _time
-        _WEEKDAYS = [
-            "Montag", "Dienstag", "Mittwoch", "Donnerstag",
-            "Freitag", "Samstag", "Sonntag",
-        ]
-        choices = []
-        now = _time.localtime()
-        today_midnight = int(_time.mktime((now.tm_year, now.tm_mon, now.tm_mday, 0, 0, 0, 0, 0, -1)))
-        all_items = getattr(self, "all_items", []) or []
-        for i in range(1, 8):
-            day_ts = today_midnight + i * 86400
-            t = _time.localtime(day_ts)
-            ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
-            dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
-            start_ts = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
-            end_ts = start_ts + 86399
-            count = sum(1 for item in all_items
-                        if start_ts <= item.get("timestamp", 0) <= end_ts)
-            if i == 1:
-                label = _b("Morgen (%s) - %d" % (dsp, count))
-            else:
-                wd = _WEEKDAYS[t.tm_wday]
-                label = wd + _b(" (%s) - %d" % (dsp, count))
-            choices.append((label, ds))
-        self.session.openWithCallback(
-            self._on_sn_date_chosen,
-            OeMediathekPickerScreen,
-            title="Demnächst — Datum wählen:",
-            choices=choices,
-        )
-
-    def _on_sn_date_chosen(self, date_str):
-        if not date_str:
-            return
-        try:
-            import time as _time
-            parts = date_str.split("-")
-            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-            # Mitternacht bis 23:59:59 in der Lokalzeit der Box
-            start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
-            end_ts = start_ts + 86399
-        except Exception:
-            self["status_label"].setText(_b("Datum ungueltig!"))
-            return
-
-        filtered = [item for item in self.all_items
-                    if start_ts <= item.get("timestamp", 0) <= end_ts]
-
-        self._sn_mode = True
-        self._sv_sn_items = filtered
-        if not filtered:
-            self.groups_filtered = []
-            self._show_groups()
-            self["status_label"].setText(_b("Keine Sendungen am %s" % date_str))
-            return
-
-        self._show_sv_sn_flat(date_str)
-
-    def _sv_reset(self):
-        """SV/SN-Filter aufheben — zurück zur vollständigen Gruppenansicht."""
-        self._sv_mode = False
-        self._sn_mode = False
-        self.groups_filtered = _relevance_sort(self.groups, self.current_search)
-        self._show_groups()
-
-    def _show_sv_sn_flat(self, date_str):
-        """Zeigt SV/SN-Items direkt als flache Episodenliste, ohne Gruppen-Zwischenschritt."""
-        self._sv_sn_date_str = date_str
-        if self._ep_sort_mode == "title":
-            # Sortierschluessel MUSS exakt dem Anzeigetext entsprechen (inkl. Topic-
-            # Praefix) - sonst landen Episoden wie bei "Der Elefant" (Topic steht nicht
-            # im Titel, wird beim Anzeigen vorangestellt) an der falschen Position,
-            # weil nach dem reinen Titel statt dem sichtbaren Text sortiert wuerde.
-            def _sk(i):
-                lb = _episode_label(i["title"], i.get("group"), season=i.get("season"), episode=i.get("episode"))
-                try:
-                    return lb.decode("utf-8", "replace").lower()
-                except Exception:
-                    return str(lb).lower()
-            items = sorted(self._sv_sn_items, key=_sk)
-        else:
-            items = sorted(self._sv_sn_items, key=lambda i: i.get("timestamp", 0))
-        self.mode = MODE_EPISODES
-        self.cur_episodes = items
-        self.cur_group_name = ""
-        self.ep_page = 0
-        self.ep_total = len(items)
-        self.ep_has_more = False
-        self._ep_next_api_offset = 0
-
-        self["title_label"].setText(_b(self.source_name) + " | " + _b(date_str))
-        self._set_list([
-            _episode_label(i["title"], i.get("group"),
-                           watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""),
-                           season=i.get("season"), episode=i.get("episode"))
-            for i in items
-        ])
-        self["status_label"].setText(_b("%d Sendungen" % len(items)))
-        self["sort_label"].setText(_b("A-Z" if self._ep_sort_mode == "title" else "nach Uhrzeit"))
-        self["hint_red"].setText(_b("Download"))
-        self._set_hint_menu("MENU = Sammel-Download")
-        self["hint_yellow"].setText(_b("Suche (Server)"))
-        self["hint_blue"].setText(_b("Favorit"))
-        self["hint_page"].setText(_b(""))
-        self._update_ep_sort_hint()
-        self._update_info_hint()
-        self._list_focus(0)
-        self.last_index = -2
-
-    def _update_page_hint(self):
-        if self.mode == MODE_EPISODES:
-            if self.ep_has_more:
-                self["hint_page"].setText("CH+/- Seite %d" % (self.ep_page + 1))
-            elif self.ep_page > 0:
-                self["hint_page"].setText("Seite %d (letzte)" % (self.ep_page + 1))
-            else:
-                self["hint_page"].setText(_b(""))
-            return
-        if self._fav_sort_mode:
-            return
-        if self.source_name == "Meine Favoriten":
-            self["hint_page"].setText(_b(""))
-            return
-        if self._sv_mode or self._sn_mode:
-            self["hint_page"].setText(_b(""))
-            return
-        page_num = self.page + 1
-        has_more = self._paged_has_more if self._paged_total > 0 else self._has_more
-        if not has_more:
-            page_info = "Seite %d (letzte)" % page_num
-        else:
-            page_info = "CH+/- Seite %d" % page_num
-        self["hint_page"].setText(page_info)
-
-    def _start_episode_fetch(self, group_idx, reset_sort=True):
-        if self._fetching:
-            return
-        if reset_sort:
-            self._ep_sort_mode = "timestamp"
-        self.mode = MODE_EPISODES
-        self.last_index = -1
-        self.cur_group_idx = group_idx + self._sv_sn_offset()
-        self.cur_group_scroll = self._list_scroll
-        self.ep_page = 0
-        self.ep_total = 0
-        self.ep_has_more = False
-        self._ep_next_api_offset = 0
-        self.sort_mode = "timestamp"
-        self._fetching = True
-        self._fetch_target = "episodes"
-        self._fetch_episodes_result = []
-
-        gname, gitems = self.groups_filtered[group_idx]
-        self.cur_group_name = gname
-
-        group_str = _u(gname)
-
-        title_text = _u(self.source_name) + " | " + _u(group_str)
-        self["title_label"].setText(title_text)
-
-        # Favoriten haben ohnehin schon alle lokalen Folgen geladen (bis zu 500)
-        if self.source_name != "Meine Favoriten":
-            self["status_label"].setText("Lade alle Folgen ...")
-
-        self._set_list([])
-
-        self["description_text"].setText(_b(""))
-
-        self._update_red_hint()
-        self._update_page_hint()
-
-        t = threading.Thread(target=self._fetch_episodes_thread, args=(gname, gitems))
-        t.daemon = True
-        t.start()
-        if self._poll_timer:
-            self._poll_timer.start(300, True)
-
-    def _fetch_episodes_thread(self, gname, local_items):
-        try:
-            # UHD-Modus: pre-verifizierte Episoden direkt verwenden, kein MVW-Refetch
-            if self.force_uhd and local_items:
-                self._fetch_episodes_result = list(local_items)
-                self._fetch_error = None
-                self._fetching = False
-                return
-
-            try:
-                raw_str = gname.decode("utf-8", "replace")
-            except Exception:
-                raw_str = str(gname)
-
-            if ": " in raw_str:
-                pure_topic = raw_str.split(": ", 1)[1]
-            else:
-                pure_topic = raw_str
-
-            api_sort = "title" if self._ep_sort_mode == "title_all" else "timestamp"
-
-            ch = None
-            if local_items:
-                ch_bytes = local_items[0].get("channel", "") or ""
-                ch = _u(ch_bytes) or None
-
-            # ZDF UHD Favoriten: lokale UHD-Items direkt verwenden, kein MVW-Refetch
-            if local_items and ch == "ZDF UHD":
-                self._fetch_episodes_result = list(local_items)
-                self._fetch_error = None
-                self._fetching = False
-                return
-            if ch == "ZDF UHD":
-                ch = "ZDF"
-
-            # Adaptiver Fetch: solange nachladen bis PAGE_SIZE Treffer gesammelt
-            # oder keine weiteren Daten mehr kommen. Jeder Schritt laedt PAGE_SIZE
-            # Eintraege, da AD/GS-Filter viele rauswirft.
-            exact_items = []
-            api_offset = self._ep_next_api_offset
-            total = 0
-            last_res_full = False
-            max_rounds = 10
-            max_exact = 1000 if self._ep_sort_mode == "title" else PAGE_SIZE
-            for _ in range(max_rounds):
-                res, total, raw_cnt = _mvw_query(
-                    channel=ch,
-                    offset=api_offset,
-                    size=PAGE_SIZE,
-                    search_term=pure_topic,
-                    min_duration=self.min_duration,
-                    sort_by=api_sort,
-                    search_fields=["topic"],
-                )
-                for item in res:
-                    ig = item.get("group", "")
-                    ig_str = _u(ig)
-                    # Sender-Prefix aus dem API-group_key herausrechnen (z.B. "ARD: Sportschau" → "Sportschau"),
-                    # damit der Vergleich auch ohne Channel-Filter funktioniert (A-Z bei "Alle Mediatheken").
-                    ig_pure = ig_str.split(": ", 1)[-1] if ": " in ig_str else ig_str
-                    if ig_str == (pure_topic if ch else raw_str) or ig_pure == pure_topic:
-                        exact_items.append(item)
-                api_offset += PAGE_SIZE
-                last_res_full = (raw_cnt >= PAGE_SIZE)
-                if not last_res_full:
-                    break
-                if len(exact_items) >= max_exact:
-                    break
-
-            self.ep_total = total
-            self._ep_api_has_more = last_res_full
-            self._ep_next_api_offset = api_offset
-
-            if not exact_items:
-                exact_items = list(local_items)
-
-            self._fetch_episodes_result = exact_items
-            self._fetch_error = None
-        except Exception:
-            self._fetch_episodes_result = list(local_items)
-            self._fetch_error = _fmt_exc()
-        self._fetching = False
-
-    def _on_episodes_fetch_done(self):
-        if self._fetch_error:
-            _log("Episoden Fetch Fehler: " + str(self._fetch_error))
-
-        is_direct_hits = self.cur_group_name.startswith(">> Direkte Treffer")
-        show_group = is_direct_hits or self.source_name == "Meine Favoriten"
-
-        if self._ep_sort_mode == "title":
-            # Sortierschluessel MUSS exakt dem Anzeigetext entsprechen (inkl. Topic-
-            # Praefix bei show_group) - siehe _show_sv_sn_flat fuer denselben Fix.
-            def _sort_key(i):
-                lb = _episode_label(i["title"], i.get("group") if show_group else None, season=i.get("season"), episode=i.get("episode"))
-                try:
-                    return lb.decode("utf-8", "replace").lower()
-                except Exception:
-                    return str(lb).lower()
-            self.cur_episodes = sorted(self._fetch_episodes_result, key=_sort_key)
-            self.ep_has_more = False
-        else:
-            self.cur_episodes = self._fetch_episodes_result
-            self.ep_has_more = getattr(self, "_ep_api_has_more", False)
-
-        self._set_list([_episode_label(i["title"], i.get("group") if show_group else None, watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes])
-
-        if self.ep_total > 0 and (self.ep_has_more or self.ep_page > 0):
-            self["status_label"].setText(_b("%d  ·  ~%d gesamt" % (len(self.cur_episodes), self.ep_total)))
-        else:
-            self["status_label"].setText("%d Folgen" % len(self.cur_episodes))
-        if self._ep_sort_mode == "title":
-            _ep_sort_lbl = "A-Z lokal (1000)"
-        elif self._ep_sort_mode == "title_all":
-            _ep_sort_lbl = "A-Z (alle)"
-        else:
-            _ep_sort_lbl = "Neueste zuerst"
-        self["sort_label"].setText(_b(_ep_sort_lbl))
-
-        self["hint_red"].setText(_b("Download"))
-        self._set_hint_menu("MENU = Sammel-Download")
-        if self.source_name != "Meine Favoriten":
-            self["hint_yellow"].setText("Suche (Server)")
-        else:
-            self["hint_yellow"].setText(_b(""))
-        self["hint_blue"].setText(_b("Favorit"))
-        self._update_ep_sort_hint()
-
-        self._update_page_hint()
-        self._update_info_hint()
-        self._list_focus(0)
-        self.last_index = -2
-        try:
-            self._first_desc_timer.stop()
-        except Exception:
-            pass
-        self._first_desc_timer = eTimer()
-        self._first_desc_timer.callback.append(self._force_first_desc)
-        self._first_desc_timer.start(300, True)
-
-    def _set_list(self, items):
-        self._list_items = list(items)
-        self._list_sel = 0
-        self._list_scroll = 0
-        self._render_list()
-
-    def _get_list_index(self):
-        if not self._list_items:
-            return None
-        return self._list_sel
-
-    def _list_focus(self, idx, scroll=None):
-        if not self._list_items:
-            return
-        self._list_sel = max(0, min(idx, len(self._list_items) - 1))
-        if scroll is not None:
-            self._list_scroll = max(0, scroll)
-        if self._list_sel < self._list_scroll:
-            self._list_scroll = self._list_sel
-        elif self._list_sel >= self._list_scroll + _LIST_ROWS:
-            self._list_scroll = self._list_sel - _LIST_ROWS + 1
-        self._list_scroll = max(0, self._list_scroll)
-        self._render_list()
-
-    def _render_list(self):
-        total = len(self._list_items)
-        if total == 0:
-            self._list_sel = self._list_scroll = 0
-        else:
-            self._list_sel = max(0, min(self._list_sel, total - 1))
-            if self._list_sel < self._list_scroll:
-                self._list_scroll = self._list_sel
-            elif self._list_sel >= self._list_scroll + _LIST_ROWS:
-                self._list_scroll = self._list_sel - _LIST_ROWS + 1
-            # Kein oberes Clamping auf total-_LIST_ROWS: die letzte Seite darf
-            # eine echte, nicht zurueckgezogene Teil-Seite sein (leere Zeilen
-            # statt Ueberlappung mit der vorherigen Seite), siehe _list_step().
-            self._list_scroll = max(0, self._list_scroll)
-        for i in range(_LIST_ROWS):
-            abs_idx = self._list_scroll + i
-            if abs_idx < total:
-                item = self._list_items[abs_idx]
-                if isinstance(item, bytes):
-                    try:
-                        item = item.decode("utf-8", "replace")
-                    except Exception:
-                        item = str(item)
-                if item.startswith("* "):
-                    if self._dot_pix:
-                        try:
-                            self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
-                        except Exception:
-                            pass
-                    self["list_dot_%d" % i].show()
-                    item = item[2:]
-                elif self.mode == MODE_GROUPS and is_favorite(_b(item)):
-                    if self._fav_pix:
-                        try:
-                            self["list_dot_%d" % i].instance.setPixmap(self._fav_pix)
-                        except Exception:
-                            pass
-                    self["list_dot_%d" % i].show()
-                elif self.mode == MODE_EPISODES and abs_idx < len(self.cur_episodes):
-                    ep = self.cur_episodes[abs_idx]
-                    url = ep.get("stream_url_hd", "") or ep.get("stream_url_sd", "")
-                    if url and is_episode_favorite(url):
-                        if self._fav_pix:
-                            try:
-                                self["list_dot_%d" % i].instance.setPixmap(self._fav_pix)
-                            except Exception:
-                                pass
-                        self["list_dot_%d" % i].show()
-                    else:
-                        self["list_dot_%d" % i].hide()
-                else:
-                    self["list_dot_%d" % i].hide()
-                if self.mode == MODE_EPISODES and abs_idx < len(self.cur_episodes):
-                    ep = self.cur_episodes[abs_idx]
-                    if self.force_uhd:
-                        base = _episode_stream_url(ep)
-                        cands = uhd_url_candidates(base) if base else [base]
-                        dl_pending = any(_is_download_pending(c) for c in cands) or _is_download_pending(base)
-                    else:
-                        dl_pending = _is_download_pending(_episode_stream_url(ep, prefer_720p=(get_download_quality() == "720p")))
-                    if dl_pending:
-                        self["list_dl_%d" % i].show()
-                    else:
-                        self["list_dl_%d" % i].hide()
-                else:
-                    self["list_dl_%d" % i].hide()
-                self["list_label_%d" % i].setText(_b(item))
-                self["list_label_%d" % i].show()
-                if abs_idx == self._list_sel:
-                    self["list_sel_%d" % i].show()
-                else:
-                    self["list_sel_%d" % i].hide()
-            else:
-                self["list_sel_%d" % i].hide()
-                self["list_label_%d" % i].hide()
-                self["list_dot_%d" % i].hide()
-                self["list_dl_%d" % i].hide()
-        if self.mode == MODE_EPISODES:
-            self._update_red_hint()
-        _update_scrollbar_widget(
-            self,
-            1142 if IS_FHD else 766,
-            150 if IS_FHD else 97,
-            58 if IS_FHD else 38,
-            _LIST_ROWS,
-        )
-        self._sync_dl_poll()
-
-    def _sync_dl_poll(self):
-        pending = self.mode == MODE_EPISODES and bool(
-            _download_queue or (_active_downloader and _active_downloader._thread
-                                and _active_downloader._thread.is_alive()))
-        if pending:
-            if not getattr(self, "_dl_poll_timer", None):
-                self._dl_poll_timer = eTimer()
-                self._dl_poll_timer.callback.append(self._poll_dl_icons)
-            self._dl_poll_timer.start(2000, True)
-        elif getattr(self, "_dl_poll_timer", None):
-            try:
-                self._dl_poll_timer.stop()
-            except Exception:
-                pass
-
-    def _poll_dl_icons(self):
-        self._render_list()
-
-    def _list_step(self, step):
-        total = len(self._list_items)
-        if total == 0:
-            return
-        old_sel = self._list_sel
-        old_scroll = self._list_scroll
-        new_sel = (old_sel + step) % total
-        self._list_sel = new_sel
-        if self._list_sel < old_scroll or self._list_sel >= old_scroll + _LIST_ROWS:
-            # Beim Verlassen der sichtbaren Seite springt der neue Eintrag an den
-            # Seitenrand in Bewegungsrichtung (Systemlisten-Verhalten: runter ->
-            # Eintrag oben, hoch -> Eintrag unten), statt zeilenweise mit dem
-            # Cursor am Rand kleben zu bleiben. Deckt Wrap-around automatisch mit ab.
-            if step > 0:
-                self._list_scroll = self._list_sel
-            else:
-                self._list_scroll = self._list_sel - _LIST_ROWS + 1
-        # Kein oberes Clamping auf total-_LIST_ROWS: die letzte Seite darf eine
-        # echte, nicht zurueckgezogene Teil-Seite sein (leere Zeilen unterhalb
-        # des letzten Eintrags statt Ueberlappung mit der vorherigen Seite).
-        self._list_scroll = max(0, self._list_scroll)
-        if self._list_scroll != old_scroll:
-            self._render_list()
-        else:
-            old_row = old_sel - old_scroll
-            new_row = self._list_sel - self._list_scroll
-            if 0 <= old_row < _LIST_ROWS:
-                self["list_sel_%d" % old_row].hide()
-            if 0 <= new_row < _LIST_ROWS:
-                self["list_sel_%d" % new_row].show()
-        # hint_red haengt vom Pending-Status der jeweils markierten Folge ab
-        # (siehe on_download/_cancel_pending_download) - ohne diesen Aufruf
-        # bleibt "Download abbrechen" beim Weiterblaettern faelschlich stehen.
-        if self.mode == MODE_EPISODES:
-            self._update_red_hint()
-
-    def _enqueue_single_episode(self, item, callback, target_dir=None):
-        """Loest die Stream-URL einer Episode auf und reiht sie in die
-        Download-Queue ein. Ruft callback(state) GENAU EINMAL auf, state ist
-        "started"/"queued"/"duplicate"/"failed" - bei ZDF UHD (force_uhd)
-        asynchron per Hintergrund-Thread + reactor.callFromThread, sonst
-        synchron. Gemeinsame Basis fuer Einzel- (on_download) und
-        Sammel-Downloads (_do_bulk_download). target_dir wird bei Sammel-Downloads
-        und optional bei Einzel-Downloads gesetzt (Unterordner pro Sendung)."""
-        try:
-            if self.force_uhd:
-                base = _episode_stream_url(item)
-                if not base:
-                    callback("failed")
-                    return
-                desc = item.get("description", "")
-                dur = item.get("duration", "")
-                dl_topic = item.get("group") or self.cur_group_name if self.cur_group_name.startswith(">> Direkte Treffer") else self.cur_group_name
-                _title = _download_title(item["title"], item.get("season"), item.get("episode"))
-                _web = item.get("url_website", "")
-
-                def _enqueue_uhd(_u=base, _tl=_title, _dt=dl_topic, _d=desc, _dr=dur, _w=_web, _cb=callback, _td=target_dir):
-                    from twisted.internet import reactor
-                    try:
-                        final = (resolve_uhd_url_via_document_api(_w) if _w else None) or resolve_uhd_url(_u)
-                    except Exception:
-                        final = _u
-
-                    def _do():
-                        state = _enqueue_download(_tl, final, _dt, _d, _dr, target_dir=_td)
-                        _cb(state)
-                    reactor.callFromThread(_do)
-                t = threading.Thread(target=_enqueue_uhd)
-                t.daemon = True
-                t.start()
-                return
-
-            url = _episode_stream_url(item, prefer_720p=(get_download_quality() == "720p"))
-            if not url:
-                callback("failed")
-                return
-
-            desc = item.get("description", "")
-            dur = item.get("duration", "")
-            dl_topic = item.get("group") or self.cur_group_name if self.cur_group_name.startswith(">> Direkte Treffer") else self.cur_group_name
-
-            state = _enqueue_download(_download_title(item["title"], item.get("season"), item.get("episode")), url, dl_topic, desc, dur, target_dir=target_dir)
-            callback(state)
-        except Exception:
-            _log("_enqueue_single_episode Fehler: " + _fmt_exc())
-            callback("failed")
-
-    def on_download(self):
-        if self.mode != MODE_EPISODES:
-            return
-        idx = self._get_list_index()
-        if idx is None or idx >= len(self.cur_episodes):
-            return
-        item = self.cur_episodes[idx]
-
-        # Laeuft dieser Download bereits (aktiv oder in der Warteschlange)?
-        # Dann bricht Rot ihn stattdessen ab, statt einen Duplikat-Hinweis zu
-        # zeigen. Nur fuer den Normalfall, nicht bei ZDF UHD (force_uhd) -
-        # dort ist die tatsaechlich eingereihte URL erst nach der
-        # asynchronen Document-API-Aufloesung bekannt, ein Pending-Check
-        # vorher ist nicht zuverlaessig moeglich.
-        if not self.force_uhd:
-            url = _episode_stream_url(item, prefer_720p=(get_download_quality() == "720p"))
-            if url and _is_download_pending(url):
-                self._cancel_pending_download(url)
-                return
-
-        def _done(state):
-            if state == "duplicate":
-                self._show_toast("Bereits in der Warteschlange")
-            elif state == "queued":
-                self._show_toast("Zur Warteschlange hinzugefügt", added=True)
-            elif state == "started":
-                self._show_toast("Download gestartet", added=True)
-            else:
-                self["status_label"].setText(_b("Kein Stream verfügbar"))
-                return
-            self._update_red_hint()
-            self._render_list()
-
-        target_dir = None
-        if get_download_subfolder():
-            show = _u(item.get("group") or self.cur_group_name)
-            if show and not show.startswith(">> "):
-                target_dir = _show_target_dir(show)[0]
-        self._enqueue_single_episode(item, _done, target_dir=target_dir)
-
-    def _cancel_pending_download(self, url):
-        """Bricht einen bereits laufenden oder wartenden Download ab (per
-        URL) - Gegenstueck zum Enqueue in on_download()."""
-        active_thread = _active_downloader._thread if _active_downloader else None
-        was_active = (_active_downloader is not None and _active_downloader.url == url
-                      and active_thread is not None and active_thread.is_alive())
-        if was_active:
-            _cancel_current_download()
-            self._show_toast("Download wird abgebrochen", added=False)
-        elif _cancel_queued_download(url):
-            self._show_toast("Aus Warteschlange entfernt", added=False)
-        else:
-            self._show_toast("Bereits abgeschlossen")
-        self._update_red_hint()
-        self._render_list()
-        if was_active:
-            # cancel() setzt nur ein Signal - der Downloader-Thread braucht
-            # noch einen Moment, bis er es bemerkt und wirklich stoppt.
-            # _render_list() direkt danach sieht ihn daher oft noch als
-            # aktiv, "Download abbrechen" bliebe faelschlich stehen (der
-            # 2s-Poll in _sync_dl_poll() haette sich zu diesem Zeitpunkt
-            # bereits selbst abgeschaltet). Ein einmaliger Nachtrigger holt
-            # den korrekten Zustand zuverlaessig nach.
-            t = eTimer()
-            t.callback.append(self._render_list)
-            t.start(1000, True)
-            self._cancel_recheck_timer = t
-
-    def on_download_menu(self):
-        """MENU in der Episodenansicht: Auswahlmenu fuer Sammel-Downloads
-        (ganze Seite, oder eine auf der aktuellen Seite erkannte Staffel).
-        VTis Keymap bindet KEY_MENU mit "mr" (Make+Repeat) statt nur "m" wie
-        bei OpenATV - bei laengerem Halten koennte das mehrfach feuern und
-        mehrere Picker-Fenster stapeln, daher die Sperre unten."""
-        if self.mode != MODE_EPISODES or not self.cur_episodes:
-            return
-        if getattr(self, "_download_menu_open", False):
-            return
-        seasons_found = []
-        seen = set()
-        for it in self.cur_episodes:
-            s = _effective_season(it)
-            if s is not None and s not in seen:
-                seen.add(s)
-                seasons_found.append(s)
-        seasons_found.sort()
-
-        choices = [(_b("Alle Einträge dieser Seite downloaden (%d)" % len(self.cur_episodes)), ("page", None))]
-        for s in seasons_found:
-            cnt = sum(1 for it in self.cur_episodes if _effective_season(it) == s)
-            choices.append((_b("Staffel %d downloaden (%d Folgen)" % (s, cnt)), ("season", s)))
-
-        def _cb(res):
-            self._download_menu_open = False
-            if not res:
-                return
-            kind, val = res
-            if kind == "page":
-                self._do_bulk_download(list(self.cur_episodes))
-            elif kind == "season":
-                matching = [it for it in self.cur_episodes if _effective_season(it) == val]
-                self._do_bulk_download(matching)
-
-        self._download_menu_open = True
-        self.session.openWithCallback(_cb, OeMediathekPickerScreen, _b("Download-Optionen"), choices)
-
-    def _do_bulk_download(self, items):
-        if not items:
-            return
-        target_dir, folder = _show_target_dir(self.cur_group_name)
-
-        counts = {"started": 0, "queued": 0, "duplicate": 0, "failed": 0}
-        remaining = [len(items)]
-
-        def _one_done(state):
-            counts[state] = counts.get(state, 0) + 1
-            remaining[0] -= 1
-            if remaining[0] <= 0:
-                added = counts["started"] + counts["queued"]
-                if target_dir:
-                    msg = "%d Folgen in Ordner \"%s\" hinzugefügt" % (added, folder)
-                else:
-                    msg = "%d Folgen zur Warteschlange hinzugefügt" % added
-                extra = []
-                if counts["duplicate"]:
-                    extra.append("%d bereits vorhanden" % counts["duplicate"])
-                if counts["failed"]:
-                    extra.append("%d ohne Stream" % counts["failed"])
-                if extra:
-                    msg += " (" + ", ".join(extra) + ")"
-                self._show_toast(msg, added=bool(added))
-                self._render_list()
-
-        for it in items:
-            self._enqueue_single_episode(it, _one_done, target_dir=target_dir)
-
-    def on_ok(self):
-        try:
-            idx = self._get_list_index()
-            _log("on_ok mode=%d idx=%s" % (self.mode, str(idx)))
-            if idx is None:
-                return
-            # Episode-Favoriten-Sortiermodus: OK = Greifen oder Ablegen
-            if self._ep_fav_sort_mode:
-                if self._ep_fav_grabbed is None:
-                    self._ep_fav_grabbed = idx
-                    self._list_items = self._ep_fav_list_entries()
-                    self._list_focus(idx)
-                    self._ep_fav_update_hints()
-                else:
-                    self._ep_fav_grabbed = None
-                    self._list_items = self._ep_fav_list_entries()
-                    self._render_list()
-                    self._ep_fav_update_hints()
-                return
-            # Favoriten-Sortiermodus: OK = Greifen oder Ablegen
-            if self._fav_sort_mode:
-                if self._fav_grabbed is None:
-                    self._fav_grabbed = idx
-                    self._list_items = self._fav_list_entries()
-                    self._list_focus(idx)
-                    self._fav_update_hints()
-                else:
-                    self._fav_grabbed = None
-                    self._show_groups(restore_pos=True)
-                return
-            if self.mode == MODE_GROUPS:
-                offset = self._sv_sn_offset()
-                if offset >= 1 and idx == 0:
-                    self._prefetch_sv_sn("sv")
-                elif offset == 2 and idx == 1:
-                    self._prefetch_sv_sn("sn")
-                elif idx - offset < len(self.groups_filtered):
-                    self._start_episode_fetch(idx - offset)
-            else:
-                if idx < len(self.cur_episodes):
-                    item = self.cur_episodes[idx]
-
-                    if self.force_uhd:
-                        base = _episode_stream_url(item)
-                        if not base:
-                            self["status_label"].setText(_b("Kein Stream verfügbar"))
-                            return
-                        _title = item["title"]
-                        _sess = self.session
-                        _web = item.get("url_website", "")
-
-                        def _play_uhd(_u=base, _t=_title, _s=_sess, _w=_web):
-                            from twisted.internet import reactor
-                            try:
-                                final = (resolve_uhd_url_via_document_api(_w) if _w else None) or resolve_uhd_url(_u)
-                            except Exception:
-                                final = _u
-                            reactor.callFromThread(play_stream_async, _s, final, _t)
-                        t = threading.Thread(target=_play_uhd)
-                        t.daemon = True
-                        t.start()
-                        return
-
-                    url_hd = _playable_url(item.get("stream_url_hd", ""))
-                    url_sd = _playable_url(item.get("stream_url_sd", ""))
-
-                    options = []
-                    if url_hd:
-                        options.append((_b("Hohe Qualität (1080p)"), url_hd))
-                    if url_sd and url_sd != url_hd:
-                        options.append((_b("720p"), url_sd))
-
-                    sq = get_stream_quality()
-                    if len(options) > 1 and sq == "ask":
-                        _title = item["title"]
-                        self.session.openWithCallback(
-                            lambda url, t=_title: self.play_selected_quality(url, t),
-                            OeMediathekPickerScreen,
-                            title="Qualität wählen:",
-                            choices=options,
-                        )
-                    elif options:
-                        url = (url_sd if (url_sd and url_sd != url_hd) else url_hd) if sq == "720p" else (url_hd if url_hd else url_sd)
-                        _log("Starte direkt: " + str(item["title"]))
-                        play_stream_async(self.session, url, item["title"])
-                    else:
-                        self["status_label"].setText(_b("Kein Stream gefunden!"))
-                        _log("Kein abspielbarer Stream für: " + _u(item["title"]))
-        except Exception:
-            _log("on_ok Fehler: " + _fmt_exc())
-
-    def play_selected_quality(self, url, title):
-        if url:
-            _log("Starte (Auswahl): " + str(title))
-            play_stream_async(self.session, url, title)
-
-    def on_cancel(self):
-        if self._ep_fav_sort_mode:
-            if self._ep_fav_order_backup is not None:
-                self.cur_episodes = list(self._ep_fav_order_backup)
-            self._ep_fav_sort_mode = False
-            self._ep_fav_grabbed = None
-            self._ep_fav_order_backup = None
-            self._list_items = self._ep_fav_list_entries()
-            self._render_list()
-            self._ep_fav_update_hints()
-            return
-        if self._fav_sort_mode:
-            # Sortiermodus abbrechen: Reihenfolge wiederherstellen
-            if self._fav_order_backup is not None:
-                orig = self._fav_order_backup
-                backed = {gname: gitems for gname, gitems in self.groups_filtered}
-                self.groups_filtered = [(g, backed.get(g, [])) for g in orig if g in backed]
-            self._fav_sort_mode = False
-            self._fav_grabbed = None
-            self._fav_order_backup = None
-            self._show_groups()
-            return
-        if self.mode == MODE_EPISODES:
-            if self._fav_show_episodes:
-                self.close()
-                return
-            if self._sv_mode or self._sn_mode:
-                self._sv_reset()
-                return
-            if self.force_uhd:
-                self.close()
-                return
-            self["title_label"].setText(self.source_name)
-            self._show_groups(restore_pos=True)
-            return
-        elif self._sv_mode or self._sn_mode:
-            self._sv_reset()
-        elif self.alpha_letter:
-            self.alpha_letter = None
-            self.page = 0
-            self._paged_total = 0
-            self._paged_has_more = False
-            self._groups_next_api_offset = 0
-            self.all_items = []
-            self.groups = []
-            self.groups_filtered = []
-            self._set_list([])
-            self["description_text"].setText(_b(""))
-            self._start_fetch()
-        else:
-            self.close()
-
-    def on_red(self):
-        if self.mode == MODE_EPISODES:
-            if self._ep_fav_sort_mode:
-                self._ep_fav_toggle_sort_mode()
-                return
-            self.on_download()
-            return
-        elif self.source_name == "Meine Favoriten":
-            self._fav_toggle_sort_mode()
-        else:
-            self.open_alpha_picker()
-
-    # ------------------------------------------------------------------
-    # Favoriten-Sortiermodus
-    # ------------------------------------------------------------------
-    def _fav_toggle_sort_mode(self):
-        if not self._fav_sort_mode:
-            # Sortiermodus einschalten
-            self._fav_sort_mode = True
-            self._fav_grabbed = None
-            self._fav_order_backup = [gname for gname, _ in self.groups_filtered]
-            self._fav_update_hints()
-            self._show_groups(restore_pos=True)
-        else:
-            # Sortiermodus beenden und speichern
-            self._fav_sort_mode = False
-            self._fav_grabbed = None
-            self._fav_order_backup = None
-            reorder_favorites([gname for gname, _ in self.groups_filtered])
-            self._show_toast(_b("Reihenfolge gespeichert"), added=True)
-            self._show_groups()
-
-    def _fav_update_hints(self):
-        if self._fav_sort_mode:
-            self["hint_red"].setText(_b("Fertig"))
-            self._set_hint_menu("")
-            self["hint_green"].setText(_b("Rückgängig"))
-            self["hint_yellow"].setText(_b(""))
-            self["hint_blue"].setText(_b("Favorit löschen"))
-            if self._fav_grabbed is None:
-                self["hint_page"].setText(_b("OK = Greifen"))
-            else:
-                self["hint_page"].setText(_b("OK = Ablegen"))
-        else:
-            self._update_red_hint()
-            self["hint_green"].setText(_b(""))
-            if self._fav_show_episodes:
-                self["hint_yellow"].setText(_b("Folgen > Gruppen"))
-            else:
-                self["hint_yellow"].setText(_b("Gruppen > Folgen"))
-            self["hint_page"].setText(_b(""))
-
-    def _fav_move(self, direction):
-        """Gegriffenen Favoriten um eine Position nach oben (-1) oder unten (+1) verschieben."""
-        if not self._fav_sort_mode or self._fav_grabbed is None:
-            return
-        idx = self._fav_grabbed
-        new_idx = idx + direction
-        if new_idx < 0 or new_idx >= len(self.groups_filtered):
-            return
-        # Tauschen
-        self.groups_filtered[idx], self.groups_filtered[new_idx] = \
-            self.groups_filtered[new_idx], self.groups_filtered[idx]
-        self._fav_grabbed = new_idx
-        # Liste neu aufbauen und Cursor auf neuer Position setzen
-        self._list_items = self._fav_list_entries()
-        self._list_focus(new_idx)
-
-    def _fav_list_entries(self):
-        """Erstellt die MenuList-Eintraege fuer den Favoriten-Sortiermodus.
-        Der gegriffene Eintrag bekommt einen Pfeil-Prefix als visuellen Marker."""
-        entries = []
-        for i, (gname, _) in enumerate(self.groups_filtered):
-            if i == self._fav_grabbed:
-                entries.append(_b("» " + _u(gname)))
-            else:
-                entries.append(gname)
-        return entries
-
-    def _list_len(self):
-        if self.mode == MODE_EPISODES:
-            return len(self.cur_episodes)
-        # SV/SN-Sondereinträge sind in der MenuList, aber nicht in groups_filtered
-        return len(self.groups_filtered) + (self._sv_sn_offset() if not self.current_search else 0)
-
-    def on_up(self):
-        if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
-            self._ep_fav_move(-1)
-        elif self._fav_sort_mode and self._fav_grabbed is not None:
-            self._fav_move(-1)
-        else:
-            self._list_step(-1)
-
-    def on_down(self):
-        if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
-            self._ep_fav_move(1)
-        elif self._fav_sort_mode and self._fav_grabbed is not None:
-            self._fav_move(1)
-        else:
-            self._list_step(1)
-
-    def on_page_up(self):
-        if self._fav_sort_mode and self._fav_grabbed is not None:
-            return
-        if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
-            return
-        if not self._list_items:
-            return
-        cur_page = self._list_scroll // _LIST_ROWS
-        if self._list_scroll > 0:
-            new_scroll = max(0, (cur_page - 1) * _LIST_ROWS)
-            new_sel = new_scroll
-        else:
-            new_scroll = 0
-            new_sel = 0
-        self._list_focus(new_sel, scroll=new_scroll)
-
-    def on_page_down(self):
-        if self._fav_sort_mode and self._fav_grabbed is not None:
-            return
-        if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
-            return
-        if not self._list_items:
-            return
-        total = len(self._list_items)
-        cur_page = self._list_scroll // _LIST_ROWS
-        next_scroll = (cur_page + 1) * _LIST_ROWS
-        if next_scroll < total:
-            new_scroll = next_scroll
-            new_sel = new_scroll
-        else:
-            new_scroll = self._list_scroll
-            new_sel = total - 1
-        self._list_focus(new_sel, scroll=new_scroll)
-
-    def open_alpha_picker(self):
-        try:
-            self.session.openWithCallback(self.do_alpha_filter, OeMediathekAlphaPickerScreen)
-        except Exception:
-            _log("open_alpha_picker: " + _fmt_exc())
-
-    def do_alpha_filter(self, letter):
-        if letter is None:
-            return
-        _log("Starte ABC Deep-Fetch fuer: " + letter)
-        self.alpha_letter = letter
-        self.page = 0
-        self.mode = MODE_GROUPS
-
-        self["status_label"].setText("Suche '%s' ..." % letter)
-        self._set_list([])
-        self["description_text"].setText(_b(""))
-
-        self._fetching = True
-        self._fetch_target = "alpha"
-        self._fetch_alpha_result = []
-        self._fetch_error = None
-
-        t = threading.Thread(target=self._fetch_alpha_thread, args=(letter,))
-        t.daemon = True
-        t.start()
-        if self._poll_timer:
-            self._poll_timer.start(300, True)
-
-    def _fetch_alpha_thread(self, letter):
-        try:
-            ch = _AZ_CH_MAP.get(self.source_name)
-
-            # Topics direkt vom /api/topics-Endpunkt holen (vollstaendig, auch ohne Sender-Filter)
-            all_topics = get_topics(channel=ch)
-            if letter == "#":
-                filtered_topics = [t for t in all_topics
-                                   if t[0:1].upper() not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
-            else:
-                filtered_topics = [t for t in all_topics
-                                   if t[0:1].upper() == letter]
-            ch_str = ch or ""
-            self._fetch_alpha_result = [
-                {"group": _u(t), "title": _u(t),
-                 "channel": ch_str, "topic": _u(t)}
-                for t in filtered_topics
-            ]
-        except Exception:
-            self._fetch_error = _fmt_exc()
-        self._fetching = False
-
-    def _on_alpha_fetch_done(self):
-        if self._fetch_error:
-            _log("Alpha Fetch Fehler: " + str(self._fetch_error))
-            self["status_label"].setText("Fehler bei der Suche!")
-            return
-
-        self._has_more = False
-        self._paged_has_more = False
-        self.groups = _build_groups(self._fetch_alpha_result, self.sort_mode)
-        self.groups_filtered = list(self.groups)
-
-        _log("Alpha Deep-Fetch beendet: %d Gruppen" % len(self.groups_filtered))
-        self._show_groups()
-
-    def toggle_favorite(self):
-        try:
-            idx = self._get_list_index()
-            if idx is None:
-                return
-            # Sondereintraege koennen nicht als Favorit hinzugefuegt werden,
-            # aber falls versehentlich gespeichert: loeschen ermoeglichen
-            offset = self._sv_sn_offset()
-            if idx < offset:
-                return
-            real_idx = idx - offset
-            if real_idx >= len(self.groups_filtered):
-                return
-            gname, gitems = self.groups_filtered[real_idx]
-
-            # Sondergruppen koennen nicht als Favorit gespeichert werden
-            if _u(gname).startswith(">> "):
-                return
-
-            # Kanal direkt aus dem ersten Item der Gruppe lesen — zuverlaessig auch
-            # in der Favoriten-Ansicht und bei "Alle Mediatheken"
-            channel = ""
-            if gitems:
-                channel = gitems[0].get("channel", "") or ""
-
-            if is_favorite(gname):
-                remove_favorite(gname)
-                self._show_toast("Favorit entfernt", added=False)
-                # In der Favoriten-Ansicht den Eintrag sofort aus der Liste entfernen
-                if self.source_name == "Meine Favoriten":
-                    self.groups = [(n, i) for n, i in self.groups if n != gname]
-                    self.groups_filtered = [(n, i) for n, i in self.groups_filtered if n != gname]
-                    self._show_groups()
-                    # Cursor auf sinnvolle Position setzen (bleibt beim gleichen Index, clamped)
-                    new_len = len(self.groups_filtered)
-                    if new_len > 0:
-                        new_pos = min(real_idx, new_len - 1)
-                        self._list_focus(new_pos)
-            else:
-                add_favorite(gname, channel)
-                self._show_toast("Favorit hinzugefügt!", added=True)
-            self._update_red_hint()
-            self._update_blue_hint()
-            self._render_list()
-        except Exception:
-            _log("toggle_favorite: " + _fmt_exc())
-
-    def _show_toast(self, msg, added=True):
-        try:
-            self._toast_timer.stop()
-            if self._saved_status is None:
-                try:
-                    self._saved_status = self["status_label"].getText()
-                except Exception:
-                    self._saved_status = ""
-            prefix = "[+] " if added else "[-] "
-            self["status_label"].setText(_b(prefix + msg))
-            self._toast_timer.start(2500, True)
-        except Exception:
-            pass
-
-    def _clear_toast(self):
-        try:
-            if self._saved_status is not None:
-                self["status_label"].setText(_b(self._saved_status))
-                self._saved_status = None
-            else:
-                self["status_label"].setText(_b(""))
-        except Exception:
-            pass
-
-    def _update_info_hint(self):
-        if self.mode != MODE_EPISODES:
-            return
-        try:
-            idx = self._get_list_index()
-            if idx is not None and idx < len(self.cur_episodes):
-                item = self.cur_episodes[idx]
-                url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
-                if url and is_watched(url):
-                    self["hint_info"].setText(_b("INFO / EPG\nDemarkieren"))
-                    return
-        except Exception:
-            pass
-        self["hint_info"].setText(_b("INFO / EPG\nMarkieren"))
-
-    def _update_ep_sort_hint(self):
-        if self.mode != MODE_EPISODES:
-            return
-        if self.source_name == "Meine Favoriten" and self._fav_show_episodes:
-            return
-        if self.force_uhd and self.zdf_uhd_static:
-            self["hint_green"].setText(_b(""))
-            return
-        if self._sv_mode or self._sn_mode:
-            if self._ep_sort_mode == "timestamp":
-                self["hint_green"].setText(_b("nach Uhrzeit > A-Z"))
-            else:
-                self["hint_green"].setText(_b("A-Z > nach Uhrzeit"))
-            return
-        if self._ep_sort_mode == "timestamp":
-            self["hint_green"].setText(_b("Neueste zuerst > A-Z lokal (1000)"))
-        elif self._ep_sort_mode == "title":
-            self["hint_green"].setText(_b("A-Z lokal (1000) > A-Z (alle)"))
-        else:
-            self["hint_green"].setText(_b("A-Z (alle) > Neueste zuerst"))
-
-    def cycle_ep_sort(self):
-        if self._sv_mode or self._sn_mode:
-            self._ep_sort_mode = "title" if self._ep_sort_mode == "timestamp" else "timestamp"
-            self["description_text"].setText(_b(""))
-            self._show_sv_sn_flat(self._sv_sn_date_str)
-            return
-        if self._ep_sort_mode == "timestamp":
-            self._ep_sort_mode = "title"
-        elif self._ep_sort_mode == "title":
-            self._ep_sort_mode = "title_all"
-        else:
-            self._ep_sort_mode = "timestamp"
-        self.ep_page = 0
-        self._ep_next_api_offset = 0
-        self.ep_has_more = False
-        self._set_list([])
-        self["description_text"].setText(_b(""))
-        self._start_episode_fetch(self.cur_group_idx - self._sv_sn_offset(), reset_sort=False)
-
-    def _update_blue_hint(self):
-        if self.mode == MODE_EPISODES:
-            try:
-                idx = self._get_list_index()
-                if idx is not None and idx < len(self.cur_episodes):
-                    item = self.cur_episodes[idx]
-                    url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
-                    if url and is_episode_favorite(url):
-                        self["hint_blue"].setText(_b("Favorit löschen"))
-                        return
-            except Exception:
-                pass
-            self["hint_blue"].setText(_b("Favorit"))
-            return
-        try:
-            idx = self._get_list_index()
-            if idx is not None:
-                offset = self._sv_sn_offset()
-                if idx < offset:
-                    self["hint_blue"].setText(_b(""))
-                    return
-                real_idx = idx - offset
-                if real_idx < len(self.groups_filtered):
-                    gname, _ = self.groups_filtered[real_idx]
-                    if _u(gname).startswith(">> "):
-                        self["hint_blue"].setText(_b(""))
-                        return
-                    if is_favorite(gname):
-                        self["hint_blue"].setText(_b("Favorit löschen"))
-                        return
-        except Exception:
-            pass
-        self["hint_blue"].setText(_b("Favorit"))
-
-    def _set_hint_menu(self, text):
-        """Setzt hint_menu und passt die Groesse/Position von hint_red an -
-        zweizeilig (Status oben, MENU-Hinweis darunter) wenn text gesetzt
-        ist, sonst wieder die volle Zeilenhoehe wie die anderen Farbtasten
-        (z.B. "ABC-Auswahl", "Sortieren"), damit der Text dort nicht nach
-        oben verschoben wirkt."""
-        self["hint_menu"].setText(_b(text))
-        try:
-            if text:
-                if IS_FHD:
-                    self["hint_red"].instance.resize(eSize(350, 45))
-                    self["hint_red"].instance.move(ePoint(68, 965))
-                else:
-                    self["hint_red"].instance.resize(eSize(233, 28))
-                    self["hint_red"].instance.move(ePoint(42, 636))
-            else:
-                if IS_FHD:
-                    self["hint_red"].instance.resize(eSize(350, 100))
-                    self["hint_red"].instance.move(ePoint(68, 960))
-                else:
-                    self["hint_red"].instance.resize(eSize(233, 60))
-                    self["hint_red"].instance.move(ePoint(42, 634))
-        except Exception:
-            pass
-
-    def _update_red_hint(self):
-        if self._ep_fav_sort_mode:
-            # Waehrend des Episoden-Favoriten-Sortiermodus verwaltet
-            # _ep_fav_update_hints() Rot ("Fertig") selbst - _render_list()
-            # ruft diese Funktion aber unconditional bei MODE_EPISODES auf,
-            # ohne diesen Guard wuerde sie "Fertig" sofort wieder auf
-            # "Download" zuruecksetzen.
-            return
-        if self.mode == MODE_EPISODES:
-            try:
-                idx = self._get_list_index()
-                if idx is not None and idx < len(self.cur_episodes) and not self.force_uhd:
-                    item = self.cur_episodes[idx]
-                    url = _episode_stream_url(item, prefer_720p=(get_download_quality() == "720p"))
-                    if url and _is_download_pending(url):
-                        self["hint_red"].setText(_b("Download abbrechen"))
-                        self._set_hint_menu("MENU = Sammel-Download")
-                        return
-            except Exception:
-                pass
-            self["hint_red"].setText(_b("Download"))
-            self._set_hint_menu("MENU = Sammel-Download")
-        elif self.source_name == "Meine Favoriten":
-            self._set_hint_menu("")
-            if self._fav_sort_mode:
-                self["hint_red"].setText(_b("Fertig"))
-            else:
-                self["hint_red"].setText(_b("Sortieren"))
-        else:
-            self._set_hint_menu("")
-            self["hint_red"].setText("ABC-Auswahl")
-
-    def next_page(self):
-        if self._fetching:
-            return
-        if self.mode == MODE_EPISODES:
-            if not self.ep_has_more:
-                return
-            self.ep_page += 1
-            self._start_episode_page_fetch()
-            return
-        if not self._has_more or self._sv_mode or self._sn_mode:
-            return
-        self.page += 1
-        self._start_fetch()
-
-    def prev_page(self):
-        if self._fetching:
-            return
-        if self.mode == MODE_EPISODES:
-            if self.ep_page == 0:
-                return
-            self.ep_page -= 1
-            self._ep_next_api_offset = self.ep_page * PAGE_SIZE
-            self._start_episode_page_fetch()
-            return
-        if self.page == 0 or self._sv_mode or self._sn_mode:
-            return
-        self.page -= 1
-        self._groups_next_api_offset = self.page * (PAGE_SIZE * 5)
-        self._paged_total = 0
-        self._paged_has_more = False
-        self.all_items = []
-        self._start_fetch()
-
-    def _start_episode_page_fetch(self):
-        if self._fetching:
-            return
-        real_idx = self.cur_group_idx - self._sv_sn_offset()
-        if real_idx < 0 or real_idx >= len(self.groups_filtered):
-            return
-        gname, gitems = self.groups_filtered[real_idx]
-        self._fetching = True
-        self._fetch_target = "episodes"
-        self._fetch_episodes_result = []
-        self["status_label"].setText("Lade Seite %d ..." % (self.ep_page + 1))
-        self._set_list([])
-        self._update_page_hint()
-        t = threading.Thread(target=self._fetch_episodes_thread, args=(gname, gitems))
-        t.daemon = True
-        t.start()
-        if self._poll_timer:
-            self._poll_timer.start(300, True)
-
-    # In der Episodenansicht nur "timestamp" (kein "az" — wuerde nur aktuelle Seite sortieren)
-    _SORT_CYCLE_GROUPS = ["timestamp", "az", "za"]
-    _SORT_CYCLE_EPISODES = ["timestamp"]
-    _SORT_LABELS = {
-        "timestamp": "Neueste zuerst",
-        "az": "A-Z",
-        "za": "Z-A",
-    }
-
-    def _update_sort_label(self):
-        if self.mode == MODE_GROUPS:
-            self["sort_label"].setText(_b(self._current_sort_label()))
-
-    def _current_sort_label(self):
-        return OeMediathekScreen._SORT_LABELS.get(self.sort_mode, "Neueste zuerst")
-
-    def _next_sort_hint(self):
-        cycle = self._SORT_CYCLE_GROUPS if self.mode == MODE_GROUPS else self._SORT_CYCLE_EPISODES
-        if len(cycle) <= 1:
-            return ""
-        idx = cycle.index(self.sort_mode) if self.sort_mode in cycle else 0
-        next_mode = cycle[(idx + 1) % len(cycle)]
-        return OeMediathekScreen._SORT_LABELS.get(next_mode, "Neueste zuerst")
-
-    def cycle_sort(self):
-        try:
-            # Im Episode-Favoriten-Sortiermodus: Gruen = Rückgängig
-            if self._ep_fav_sort_mode:
-                if self._ep_fav_order_backup is not None:
-                    self.cur_episodes = list(self._ep_fav_order_backup)
-                    self._ep_fav_grabbed = None
-                    self._list_items = self._ep_fav_list_entries()
-                    self._render_list()
-                    self._ep_fav_update_hints()
-                    self._show_toast(_b("Reihenfolge zurückgesetzt"), added=True)
-                return
-            if self._fav_sort_mode:
-                if self._fav_order_backup is not None:
-                    backed = dict((gname, gitems) for gname, gitems in self.groups_filtered)
-                    self.groups_filtered = [(g, backed.get(g, [])) for g in self._fav_order_backup if g in backed]
-                    self._fav_grabbed = None
-                    self._list_items = self._fav_list_entries()
-                    self._render_list()
-                    self._fav_update_hints()
-                    self._show_toast(_b("Reihenfolge zurückgesetzt"), added=True)
-                return
-
-            cycle = self._SORT_CYCLE_GROUPS if self.mode == MODE_GROUPS else self._SORT_CYCLE_EPISODES
-            if len(cycle) <= 1:
-                return
-            idx = cycle.index(self.sort_mode) if self.sort_mode in cycle else 0
-            self.sort_mode = cycle[(idx + 1) % len(cycle)]
-            _log("Sortierung: " + self.sort_mode)
-
-            if self.mode == MODE_GROUPS:
-                if self._sv_mode or self._sn_mode:
-                    return
-                elif self.sort_mode in ("az", "za"):
-                    if self.alpha_letter:
-                        self.groups = _build_groups(self._fetch_alpha_result, self.sort_mode)
-                        self.groups_filtered = list(self.groups)
-                        self._show_groups()
-                    else:
-                        self.page = 0
-                        self.groups = []
-                        self.groups_filtered = []
-                        self._set_list([])
-                        self["description_text"].setText(_b(""))
-                        self._start_fetch()
-                else:
-                    if self.alpha_letter:
-                        self.groups = _build_groups(self._fetch_alpha_result, self.sort_mode)
-                        self.groups_filtered = list(self.groups)
-                        self._show_groups()
-                    else:
-                        self.page = 0
-                        self._groups_next_api_offset = 0
-                        self._paged_total = 0
-                        self._paged_has_more = False
-                        self.all_items = []
-                        self.groups = []
-                        self.groups_filtered = []
-                        self._set_list([])
-                        self["description_text"].setText(_b(""))
-                        self._start_fetch()
-            else:
-                self.ep_page = 0
-                self._set_list([])
-                self["description_text"].setText(_b(""))
-                self._start_episode_fetch(self.cur_group_idx - self._sv_sn_offset())
-        except Exception:
-            _log("cycle_sort: " + _fmt_exc())
-
-    def on_green(self):
-        if self._ep_fav_sort_mode or self._fav_sort_mode:
-            self.cycle_sort()
-        elif self.source_name == "Meine Favoriten" and self.mode == MODE_GROUPS:
-            # Lokale Favoriten-Gruppen nicht per API nachladen; Sortieren ueber Rot.
-            pass
-        elif self.source_name == "Meine Favoriten" and self._fav_show_episodes:
-            # Die flachen Einzelfolgen-Favoriten werden manuell sortiert.
-            self._ep_fav_toggle_sort_mode()
-        elif self.mode == MODE_EPISODES and self.force_uhd and self.zdf_uhd_static:
-            # Statische ZDF-UHD-Liste kennt keine Sortierung (get_zdf_uhd_static_episodes
-            # hat keinen sort_by-Parameter) - Gruen bleibt hier ohne Wirkung.
-            pass
-        elif self.mode == MODE_EPISODES:
-            self.cycle_ep_sort()
-        else:
-            self.cycle_sort()
-
-    def on_info(self):
-        if self.mode == MODE_EPISODES:
-            self.on_toggle_watched()
-
-    def on_toggle_watched(self):
-        try:
-            idx = self._get_list_index()
-            if idx is None or idx >= len(self.cur_episodes):
-                return
-            item = self.cur_episodes[idx]
-            url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
-            if not url:
-                return
-            toggle_watched(url)
-            is_direct_hits = _u(self.cur_group_name).startswith(">> Direkte Treffer")
-            show_group = is_direct_hits or self.source_name == "Meine Favoriten"
-            self._list_items = [_episode_label(i["title"], i.get("group") if show_group else None, watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes]
-            self._list_focus(idx)
-            self._update_info_hint()
-        except Exception:
-            _log("on_toggle_watched: " + _fmt_exc())
-
-    def toggle_episode_favorite(self):
-        try:
-            idx = self._get_list_index()
-            if idx is None or idx >= len(self.cur_episodes):
-                return
-            item = self.cur_episodes[idx]
-            url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
-            if not url:
-                return
-            if is_episode_favorite(url):
-                remove_episode_favorite(url)
-                self._show_toast(_b("Favorit entfernt"), added=False)
-                if self.source_name == "Meine Favoriten" and self._fav_show_episodes:
-                    self.cur_episodes = [i for i in self.cur_episodes if (i.get("stream_url_hd") or i.get("stream_url_sd") or "") != url]
-                    self._list_items = [_episode_label(i["title"], i.get("group"), watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes]
-                    self["status_label"].setText(_b("%d Einzelfolgen" % len(self.cur_episodes)))
-                    new_idx = min(idx, len(self.cur_episodes) - 1)
-                    if new_idx >= 0:
-                        self._list_focus(new_idx)
-                    else:
-                        self._render_list()
-            else:
-                add_episode_favorite(item)
-                self._show_toast(_b("Favorit hinzugefügt!"), added=True)
-            self._update_blue_hint()
-            self._render_list()
-        except Exception:
-            _log("toggle_episode_favorite: " + _fmt_exc())
-
-    def on_blue(self):
-        if self.mode == MODE_EPISODES:
-            self.toggle_episode_favorite()
-        else:
-            self.toggle_favorite()
-
-    def on_yellow(self):
-        if self.source_name == "Meine Favoriten" and not self._fav_sort_mode:
-            self._fav_toggle_episode_view()
-        else:
-            self.open_search()
-
-    def _fav_toggle_episode_view(self):
-        if self._fav_sort_mode or self._ep_fav_sort_mode:
-            return
-        self._fav_show_episodes = not self._fav_show_episodes
-        self._fav_update_hints()
-        if self._fav_show_episodes:
-            self._fav_allow_auto_switch = True
-            self._show_episode_favorites()
-        else:
-            self._fav_allow_auto_switch = False
-            self._reload_favorites()
-
-    def _show_episode_favorites(self):
-        items = get_episode_favorites()
-        self["status_label"].setText(_b("%d Einzelfolgen" % len(items)))
-        # cur_episodes/mode MUESSEN vor _set_list() gesetzt werden: _set_list()
-        # rendert die Liste synchron ueber _render_list(), das den Favoriten-
-        # Stern nur zeichnet wenn self.mode bereits MODE_EPISODES ist. War das
-        # noch der alte Wert (Wechsel aus der Gruppen-Favoriten-Ansicht),
-        # fehlte der Stern beim ersten Anzeigen komplett.
-        self.cur_episodes = items
-        self.mode = MODE_EPISODES
-        self._set_list([_episode_label(i["title"], i.get("group"), watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in items])
-        self.last_index = -1
-        self._ep_fav_sort_mode = False
-        self._ep_fav_grabbed = None
-        self._ep_fav_order_backup = None
-        self._ep_fav_update_hints()
-        self._update_info_hint()
-
-    def _ep_fav_update_hints(self):
-        if self._ep_fav_sort_mode:
-            self["hint_red"].setText(_b("Fertig"))
-            self._set_hint_menu("")
-            self["hint_green"].setText(_b("Rückgängig"))
-            self["hint_yellow"].setText(_b(""))
-            self["hint_blue"].setText(_b("Favorit löschen"))
-            if self._ep_fav_grabbed is None:
-                self["hint_page"].setText(_b("OK = Greifen"))
-            else:
-                self["hint_page"].setText(_b("OK = Ablegen"))
-        else:
-            self._update_red_hint()
-            self["hint_green"].setText(_b("Sortieren"))
-            self["hint_yellow"].setText(_b("Folgen > Gruppen"))
-            self["hint_blue"].setText(_b("Favorit löschen"))
-            self["hint_info"].setText(_b("INFO / EPG\nMarkieren"))
-            self["hint_page"].setText(_b(""))
-
-    def _ep_fav_toggle_sort_mode(self):
-        if not self._ep_fav_sort_mode:
-            self._ep_fav_sort_mode = True
-            self._ep_fav_grabbed = None
-            self._ep_fav_order_backup = list(self.cur_episodes)
-            self._ep_fav_update_hints()
-            self._list_items = self._ep_fav_list_entries()
-            self._render_list()
-        else:
-            self._ep_fav_sort_mode = False
-            self._ep_fav_grabbed = None
-            self._ep_fav_order_backup = None
-            from .mediathek import _save_episode_favorites, _item_to_text
-            _save_episode_favorites([_item_to_text(i) for i in self.cur_episodes])
-            self._show_toast(_b("Reihenfolge gespeichert"), added=True)
-            self._list_items = self._ep_fav_list_entries()
-            self._render_list()
-            self._ep_fav_update_hints()
-
-    def _ep_fav_list_entries(self):
-        entries = []
-        for i, item in enumerate(self.cur_episodes):
-            label = _episode_label(item["title"], item.get("group"), watched=is_watched(item.get("stream_url_hd") or item.get("stream_url_sd") or ""), season=item.get("season"), episode=item.get("episode"))
-            if i == self._ep_fav_grabbed:
-                label = _b("» ") + label
-            entries.append(label)
-        return entries
-
-    def _ep_fav_move(self, direction):
-        if not self._ep_fav_sort_mode or self._ep_fav_grabbed is None:
-            return
-        idx = self._ep_fav_grabbed
-        new_idx = idx + direction
-        if new_idx < 0 or new_idx >= len(self.cur_episodes):
-            return
-        self.cur_episodes[idx], self.cur_episodes[new_idx] = \
-            self.cur_episodes[new_idx], self.cur_episodes[idx]
-        self._ep_fav_grabbed = new_idx
-        self._list_items = self._ep_fav_list_entries()
-        self._list_focus(new_idx)
-
-    def _reload_favorites(self):
-        self.mode = MODE_GROUPS
-        self.page = 0
-        self._paged_total = 0
-        self._paged_has_more = False
-        self.all_items = []
-        self.groups = []
-        self.groups_filtered = []
-        self._set_list([])
-        self["description_text"].setText(_b(""))
-        self._start_fetch()
-
-    def open_search(self):
-        if self.source_name == "Meine Favoriten":
-            return
-        try:
-            self.session.openWithCallback(
-                self._on_history_choice,
-                OeMediathekSearchHistoryScreen,
-            )
-        except Exception:
-            _log("open_search: " + _fmt_exc())
-
-    def _on_history_choice(self, choice):
-        if choice is None:
-            return
-        if choice == "__new__":
-            try:
-                self.session.openWithCallback(
-                    self.do_search, VirtualKeyBoard,
-                    title="Suchen:", text="",
-                )
-            except Exception:
-                _log("open_search VirtualKeyBoard: " + _fmt_exc())
-        else:
-            self.do_search(choice)
-
-    def do_search(self, term):
-        try:
-            if term is not None:
-                term = _u(term).strip()
-                if not term:
-                    self.current_search = None
-                else:
-                    self.current_search = term
-                    save_search_history(term)
-
-                self.mode = MODE_GROUPS
-                self.page = 0
-                self._paged_total = 0
-                self._paged_has_more = False
-                self._groups_next_api_offset = 0
-                self.all_items = []
-                self.groups = []
-                self.groups_filtered = []
-                self._set_list([])
-                self["description_text"].setText(_b(""))
-                self._start_fetch()
-        except Exception:
-            _log("do_search: " + _fmt_exc())
+class OeMediathekScreen(LcdIconSummaryMixin, Screen):
+
+	@staticmethod
+	def _make_skin():
+		if IS_FHD:
+			lx, ly0, lw, rh, rf = 40, 150, 1080, 58, 34
+			dw, dh, dx_off, dy_off, dl_off, label_off = 28, 24, 12, 17, 44, 80
+		else:
+			lx, ly0, lw, rh, rf = 36, 97, 720, 38, 22
+			dw, dh, dx_off, dy_off, dl_off, label_off = 18, 16, 8, 11, 30, 54
+
+		list_xml = ""
+		for i in range(_LIST_ROWS):
+			y = ly0 + i * rh
+			list_xml += (
+				'<widget name="list_sel_{i}" position="{x},{y}" size="{w},{rh}" '
+				'backgroundColor="#00253850" zPosition="1" transparent="0"/>'
+				'<widget name="list_dot_{i}" position="{dx},{dy}" size="{dw},{dh}" '
+				'alphatest="blend" scale="1" zPosition="3" transparent="1"/>'
+				'<widget name="list_dl_{i}" position="{dlx},{dy}" size="{dw},{dh}" '
+				'alphatest="blend" scale="1" zPosition="3" transparent="1"/>'
+				'<widget name="list_label_{i}" position="{lbx},{y}" size="{lbw},{rh}" '
+				'zPosition="2" font="Regular;{rf}" halign="left" valign="center" '
+				'foregroundColor="#CCCCCC" backgroundColor="#33000000" transparent="1" noWrap="1"/>'
+			).format(i=i, x=lx, y=y, w=lw, dx=lx + dx_off, dlx=lx + dl_off, dy=y + dy_off, dw=dw, dh=dh, lbx=lx + label_off, lbw=lw - label_off, rh=rh, rf=rf)
+
+		if IS_FHD:
+			return (
+				'<screen name="OeMediathekScreen" position="0,0" size="1920,1080" flags="wfNoBorder">'
+				'<eLabel position="0,0" size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>'
+				'<eLabel position="30,30" size="1860,80" backgroundColor="#33000000" zPosition="-5"/>'
+				'<widget name="title_label" position="50,30" size="850,80" font="Regular;42" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
+				'<widget name="sort_label" position="910,30" size="220,80" font="Regular;28" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
+				'<widget name="status_label" position="1140,30" size="690,80" font="Regular;28" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
+				'<eLabel position="30,140" size="1100,780" backgroundColor="#33000000" zPosition="-5"/>'
+				+ list_xml +
+				'<widget name="scrollbar_track" position="1142,150" size="6,754" backgroundColor="#1AFFFFFF" zPosition="1"/>'
+				'<widget name="scrollbar_thumb" position="1142,150" size="6,58" backgroundColor="#00253850" zPosition="2"/>'
+				'<eLabel position="1160,140" size="730,780" backgroundColor="#33000000" zPosition="-5"/>'
+				'<widget name="description_text" position="1190,160" size="670,740" font="Regular;34" foregroundColor="#CCCCCC" backgroundColor="#33000000" valign="top" halign="left" transparent="1"/>'
+				'<eLabel position="30,960" size="1860,100" backgroundColor="#1A000000" zPosition="-5"/>'
+				'<eLabel position="50,980" size="8,60" backgroundColor="#1AEE0000" zPosition="2"/>'
+				'<widget name="hint_red" position="68,965" size="350,45" font="Regular;30" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_menu" position="68,1010" size="350,40" font="Regular;22" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="450,980" size="8,60" backgroundColor="#1A00AA00" zPosition="2"/>'
+				'<widget name="hint_green" position="468,960" size="300,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="808,980" size="8,60" backgroundColor="#1AAAAA00" zPosition="2"/>'
+				'<widget name="hint_yellow" position="826,960" size="292,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="1158,980" size="8,60" backgroundColor="#1A0044DD" zPosition="2"/>'
+				'<widget name="hint_blue" position="1176,960" size="242,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_info" position="1468,960" size="220,100" font="Regular;26" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_page" position="1698,960" size="172,100" font="Regular;32" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
+				'</screen>'
+			)
+		else:
+			return (
+				'<screen name="OeMediathekScreen" position="0,0" size="1280,720" flags="wfNoBorder">'
+				'<eLabel position="0,0" size="1280,720" backgroundColor="#66000000" zPosition="-6"/>'
+				'<eLabel position="30,20" size="1220,53" backgroundColor="#33000000" zPosition="-5"/>'
+				'<widget name="title_label" position="43,20" size="560,53" font="Regular;28" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
+				'<widget name="sort_label" position="610,20" size="147,53" font="Regular;18" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
+				'<widget name="status_label" position="760,20" size="460,53" font="Regular;18" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
+				'<eLabel position="30,90" size="733,524" backgroundColor="#33000000" zPosition="-5"/>'
+				+ list_xml +
+				'<widget name="scrollbar_track" position="766,97" size="4,494" backgroundColor="#1AFFFFFF" zPosition="1"/>'
+				'<widget name="scrollbar_thumb" position="766,97" size="4,38" backgroundColor="#00253850" zPosition="2"/>'
+				'<eLabel position="773,90" size="477,524" backgroundColor="#33000000" zPosition="-5"/>'
+				'<widget name="description_text" position="790,103" size="443,504" font="Regular;22" foregroundColor="#CCCCCC" backgroundColor="#33000000" valign="top" halign="left" transparent="1"/>'
+				'<eLabel position="30,634" size="1220,60" backgroundColor="#1A000000" zPosition="-5"/>'
+				'<eLabel position="33,649" size="5,30" backgroundColor="#1AEE0000" zPosition="2"/>'
+				'<widget name="hint_red" position="42,636" size="233,28" font="Regular;20" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_menu" position="42,664" size="233,26" font="Regular;15" halign="left" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="300,649" size="5,30" backgroundColor="#1A00AA00" zPosition="2"/>'
+				'<widget name="hint_green" position="309,634" size="200,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="539,649" size="5,30" backgroundColor="#1AAAAA00" zPosition="2"/>'
+				'<widget name="hint_yellow" position="548,634" size="195,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="772,649" size="5,30" backgroundColor="#1A0044DD" zPosition="2"/>'
+				'<widget name="hint_blue" position="781,634" size="161,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_info" position="978,634" size="147,60" font="Regular;17" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_page" position="1132,634" size="118,60" font="Regular;21" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
+				'</screen>'
+			)
+
+	def __init__(self, session, source_name, loader, force_uhd=False, zdf_uhd_static=False):
+		self.skin = self._make_skin()
+		_log("ContentScreen init: " + source_name)
+		Screen.__init__(self, session)
+		self.session = session
+		self.source_name = source_name
+		self.loader = loader
+		self.force_uhd = force_uhd
+		self.zdf_uhd_static = zdf_uhd_static
+
+		self.page = 0
+		self.mode = MODE_GROUPS
+		self._has_more = True
+		self.all_items = []
+		self.groups = []
+		self.groups_filtered = []
+		self.cur_episodes = []
+		self.cur_group_name = ""
+		self.ep_page = 0
+		self.ep_total = 0
+		self.ep_has_more = False
+
+		self.current_search = None
+		self.min_duration = 0
+		self.sort_mode = "timestamp"
+		self._sv_mode = False   # True = Sendung-verpasst?-Filter aktiv
+		self._sv_sn_items = []  # gefilterte Items des aktiven Datumsfilters
+		self._sv_sn_pending = None
+		self._fav_sort_mode = False  # True = Favoriten-Sortiermodus aktiv
+		self._fav_grabbed = None  # Index des gegriffenen Favoriten
+		self._fav_order_backup = None  # Backup der Reihenfolge vor dem Sortieren
+		self._fav_show_episodes = False      # True = Episode-Favoriten-Ansicht aktiv
+		self._fav_allow_auto_switch = True   # False = User hat explizit Gruppen-Ansicht gewählt
+		self._ep_fav_sort_mode = False   # True = Sortiermodus in Episode-Favoriten
+		self._ep_fav_grabbed = None    # Index des gegriffenen Episode-Favoriten
+		self._ep_fav_order_backup = None  # Backup der Reihenfolge
+		self._ep_sort_mode = "timestamp"  # Sortierung in Episodenansicht
+		self._ep_api_has_more = False  # API hat noch Daten nach letztem Episoden-Fetch
+		self._ep_next_api_offset = 0  # Naechster API-Offset fuer Episoden-Paging
+		self._sn_mode = False   # True = Demnächst-Filter aktiv
+		self._sv_sn_date_str = ""
+
+		self._az_topics_cache = None
+
+		self._fetching = False
+		self._loaded = False   # False bis erster Fetch abgeschlossen
+		self._fetch_target = "groups"
+		self._fetch_result = []
+		self._fetch_episodes_result = []
+		self._fetch_alpha_result = []
+		self._fetch_total = 0
+		self._fetch_error = None
+		self._paged_total = 0   # _fetch_total des letzten normalen (paginieren) Fetches
+		self._paged_has_more = False
+		self._groups_next_api_offset = 0  # Naechster API-Offset fuer Gruppen-Paging
+
+		self.last_index = -1
+		self.cur_group_idx = -1
+		self.cur_group_scroll = 0
+		self.alpha_letter = None
+
+		self["title_label"] = Label(source_name)
+		self["status_label"] = Label("Lade Inhalte ...")
+		self["description_text"] = ScrollLabel(_b(""))
+
+		self._list_items = []
+		self._list_sel = 0
+		self._list_scroll = 0
+		self._dot_pix = None
+		self._fav_pix = None
+		self._dl_pix = None
+		for i in range(_LIST_ROWS):
+			self["list_sel_%d" % i] = Label(_b(""))
+			self["list_label_%d" % i] = Label(_b(""))
+			try:
+				self["list_dot_%d" % i] = _Pixmap() if _Pixmap else Label(_b(""))
+			except Exception:
+				self["list_dot_%d" % i] = Label(_b(""))
+			try:
+				self["list_dl_%d" % i] = _Pixmap() if _Pixmap else Label(_b(""))
+			except Exception:
+				self["list_dl_%d" % i] = Label(_b(""))
+			self["list_sel_%d" % i].hide()
+			self["list_label_%d" % i].hide()
+			self["list_dot_%d" % i].hide()
+			self["list_dl_%d" % i].hide()
+		self["scrollbar_track"] = Label(_b(""))
+		self["scrollbar_thumb"] = Label(_b(""))
+		self["scrollbar_track"].hide()
+		self["scrollbar_thumb"].hide()
+
+		self["sort_label"] = Label("")
+		self["hint_red"] = Label("")
+		self["hint_menu"] = Label("")
+		self["hint_green"] = Label("")
+		self["hint_yellow"] = Label("")
+		self["hint_blue"] = Label("")
+		self["hint_info"] = Label("")
+		self["hint_page"] = Label("")
+
+		self["actions"] = ActionMap(
+			["OkCancelActions", "ColorActions", "DirectionActions", "ChannelSelectBaseActions", "ListboxActions"],
+			{
+				"ok": self.on_ok,
+				"cancel": self.on_cancel,
+				"red": self.on_red,
+				"green": self.on_green,
+				"yellow": self.on_yellow,
+				"blue": self.on_blue,
+				"nextBouquet": self.next_page,
+				"prevBouquet": self.prev_page,
+				"up": self.on_up,
+				"upRepeated": self.on_up,
+				"down": self.on_down,
+				"downRepeated": self.on_down,
+				"left": self.on_page_up,
+				"right": self.on_page_down,
+				"pageUp": self.on_page_up,
+				"pageDown": self.on_page_down,
+			},
+			-1,
+		)
+		# Eigene ActionMap fuer EPGSelectActions: manche Images (z.B. OpenATV)
+		# binden KEY_RED/YELLOW/BLUE dort zusaetzlich auf "red"/"yellow"/"blue"
+		# (mit anderem make/break-Flag als ColorActions) -> waere die Aktion
+		# im selben Dict gebunden, wuerde ein einzelner Tastendruck den
+		# Handler zweimal feuern (einmal beim Druecken, einmal beim
+		# Loslassen). Deshalb hier nur die tatsaechlich benoetigten Aktionen.
+		self["actions_epg"] = ActionMap(
+			["EPGSelectActions"],
+			{
+				"info": self.on_info,
+				"epg": self.on_info,
+				"nextBouquet": self.next_page,
+				"prevBouquet": self.prev_page,
+			},
+			-1,
+		)
+		# Eigene ActionMap fuer MenuActions: KEY_MENU ist in diesem Screen
+		# bisher ungenutzt, "menu" (Make-Flag) ist auf VTi UND OpenATV im
+		# selben Kontext definiert, kein Kollisionsrisiko mit den obigen
+		# Kontexten. Bewusst nicht per Lang-Druck einer Farbtaste geloest
+		# (siehe Commit-Historie) - Break/Long-Events feuern plattform-
+		# abhaengig in unterschiedlicher Reihenfolge/zusaetzlich, MENU als
+		# eigene Taste mit reinem Make-Event ist deutlich robuster.
+		self["actions_menu"] = ActionMap(
+			["MenuActions"],
+			{
+				"menu": self.on_download_menu,
+			},
+			-1,
+		)
+		self.onShow.append(self.__on_show)
+
+		self._start_timer = eTimer()
+		self._start_timer.callback.append(self._start_fetch)
+		self._start_timer.start(300, True)
+
+		self._poll_timer = eTimer()
+		self._poll_timer.callback.append(self._poll_fetch)
+
+		self._desc_timer = eTimer()
+		self._desc_timer.callback.append(self._update_desc)
+		self._desc_timer.start(250, False)
+
+		self._toast_timer = eTimer()
+		self._toast_timer.callback.append(self._clear_toast)
+		self._saved_status = None
+
+		self._first_desc_timer = None
+
+		self.onClose.append(self.__stop_timers)
+
+	def __on_show(self):
+		if self._dot_pix is None and _Pixmap and _LoadPixmap:
+			try:
+				import os as _os
+				_path = _os.path.join(_os.path.dirname(__file__), "mark.png")
+				self._dot_pix = _LoadPixmap(_path)
+				if self._dot_pix:
+					for i in range(_LIST_ROWS):
+						try:
+							self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
+						except Exception:
+							pass
+			except Exception as e:
+				_log("mark.png load failed: " + str(e))
+		if self._fav_pix is None and _Pixmap and _LoadPixmap:
+			try:
+				import os as _os
+				_path = _os.path.join(_os.path.dirname(__file__), "bookmark.png")
+				self._fav_pix = _LoadPixmap(_path)
+			except Exception as e:
+				_log("bookmark.png load failed: " + str(e))
+		if self._dl_pix is None and _Pixmap and _LoadPixmap:
+			try:
+				import os as _os
+				_path = _os.path.join(_os.path.dirname(__file__), "download.png")
+				self._dl_pix = _LoadPixmap(_path)
+				if self._dl_pix:
+					for i in range(_LIST_ROWS):
+						try:
+							self["list_dl_%d" % i].instance.setPixmap(self._dl_pix)
+						except Exception:
+							pass
+			except Exception as e:
+				_log("download.png load failed: " + str(e))
+
+	def __stop_timers(self):
+		try:
+			self._first_desc_timer.stop()
+		except Exception:
+			pass
+		for timer, cb in ((self._start_timer, self._start_fetch), (self._poll_timer, self._poll_fetch), (self._desc_timer, self._update_desc), (self._toast_timer, self._clear_toast)):
+			try:
+				if timer:
+					timer.stop()
+					timer.callback.remove(cb)
+			except Exception:
+				pass
+		self._start_timer = None
+		self._poll_timer = None
+		self._desc_timer = None
+		self._toast_timer = None
+		if getattr(self, "_dl_poll_timer", None):
+			try:
+				self._dl_poll_timer.stop()
+			except Exception:
+				pass
+			self._dl_poll_timer = None
+
+	def doClose(self):
+		_log("doClose")
+		self.__stop_timers()
+		try:
+			Screen.doClose(self)
+		except TypeError as e:
+			_log("doClose TypeError: " + str(e))
+
+	def _start_fetch(self):
+		if self._fetching:
+			return
+		_log("Fetch Seite %d" % self.page)
+		self._fetching = True
+		self._fetch_target = "groups"
+		self._fetch_result = []
+		self._fetch_error = None
+		self["status_label"].setText("Verbinde ...")
+		t = Thread(target=self._fetch_thread)
+		t.daemon = True
+		t.start()
+		if self._poll_timer:
+			self._poll_timer.start(300, True)
+
+	def _fetch_thread(self):
+		try:
+			if self.sort_mode in ("az", "za"):
+				if self.page == 0:
+					self._az_topics_cache = None
+				if self._az_topics_cache is None:
+					ch = _AZ_CH_MAP.get(self.source_name)
+					self._az_topics_cache = get_topics(channel=ch)
+				start = self.page * AZ_PAGE_SIZE
+				topics = self._az_topics_cache if self.sort_mode == "az" else self._az_topics_cache[::-1]
+				page_topics = topics[start:start + AZ_PAGE_SIZE]
+				ch_str = _AZ_CH_MAP.get(self.source_name) or ""
+				self._fetch_result = [
+					{"group": _u(t), "title": _u(t), "channel": ch_str, "topic": _u(t)}
+					for t in page_topics
+				]
+				self._fetch_total = len(self._az_topics_cache)
+				self._fetch_az_has_more = (start + AZ_PAGE_SIZE) < len(self._az_topics_cache)
+			else:
+				FETCH_SIZE = PAGE_SIZE * 5
+				api_offset = self._groups_next_api_offset
+				res, total, rc = self.loader(
+					offset=api_offset,
+					size=FETCH_SIZE,
+					search_term=self.current_search,
+					min_duration=self.min_duration,
+					sort_by=self.sort_mode,
+				)
+				self._fetch_result = res
+				self._fetch_total = total
+				self._fetch_next_api_offset = api_offset + FETCH_SIZE
+				self._fetch_last_rc_full = (rc >= FETCH_SIZE)
+		except Exception:
+			self._fetch_error = _fmt_exc()
+		self._fetching = False
+
+	def _poll_fetch(self):
+		if self._fetching:
+			if self._poll_timer:
+				self._poll_timer.start(300, True)
+			return
+
+		if self._fetch_target == "episodes":
+			self._on_episodes_fetch_done()
+		elif self._fetch_target == "alpha":
+			self._on_alpha_fetch_done()
+		elif self._fetch_target == "sv_sn_prefetch":
+			self._on_sv_sn_prefetch_done()
+		else:
+			self._on_fetch_done()
+
+	def _on_fetch_done(self):
+		if self._fetch_error:
+			_log("Fehler: " + self._fetch_error)
+			self["status_label"].setText("Fehler beim Laden!")
+			return
+
+		raw = self._fetch_result
+		_log("Fetch ok: %d Eintraege Seite %d" % (len(raw), self.page))
+
+		if not raw and self.page == 0:
+			if self.source_name != "Meine Favoriten":
+				self["status_label"].setText("Keine Inhalte gefunden.")
+				self._set_list([])
+				return
+			self.groups = []
+			self.groups_filtered = []
+			self._show_groups()
+			return
+
+		if self.sort_mode in ("az", "za"):
+			self._has_more = getattr(self, "_fetch_az_has_more", False)
+			self._paged_total = self._fetch_total
+			self._paged_has_more = self._has_more
+		else:
+			self._has_more = getattr(self, "_fetch_last_rc_full", False)
+			self._groups_next_api_offset = getattr(self, "_fetch_next_api_offset", (self.page + 1) * PAGE_SIZE)
+			self._paged_total = self._fetch_total
+			self._paged_has_more = self._has_more
+		self.all_items = raw
+
+		self.groups = _build_groups(raw, self.sort_mode)
+		self.groups_filtered = _relevance_sort(self.groups, self.current_search)
+		self.groups_filtered = _inject_direct_hits(self.groups_filtered, self.current_search)
+		self._show_groups()
+
+	def _update_desc(self):
+		global _bg_download_result
+		if _bg_download_result is not None:
+			result = _bg_download_result
+			_bg_download_result = None
+			if result == "ok":
+				self["status_label"].setText(_b("Alle Downloads abgeschlossen!"))
+			elif result == "cancelled":
+				self["status_label"].setText(_b("Downloads abgebrochen"))
+			else:
+				self._show_toast("Download fehlgeschlagen!", added=False)
+		try:
+			idx = self._get_list_index()
+			if idx is None or idx < 0:
+				return
+			if idx == self.last_index:
+				return
+			self.last_index = idx
+
+			if self._fetching or not self._loaded:
+				return
+
+			if self.mode == MODE_GROUPS:
+				self._update_red_hint()
+				self._update_blue_hint()
+				offset = self._sv_sn_offset()
+				if idx is not None and idx >= offset:
+					real_idx = idx - offset
+					if real_idx < len(self.groups_filtered):
+						gname, gitems = self.groups_filtered[real_idx]
+						try:
+							gname_str = _u(gname)
+						except Exception:
+							gname_str = str(gname)
+						import time as _time
+						_now = _time.time()
+						past_ts = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) <= _now]
+						future_ts = [it.get("timestamp", 0) for it in gitems if it.get("timestamp", 0) and it.get("timestamp", 0) > _now]
+
+						def _fmt_ts(ts):
+							t = _time.localtime(ts)
+							return "%02d.%02d.%02d" % (t.tm_mday, t.tm_mon, t.tm_year % 100)
+						lines = [gname_str]
+						if past_ts:
+							lines.append("Letzter Eintrag: " + _fmt_ts(max(past_ts)))
+						if future_ts:
+							lines.append("Nächster Termin: " + _fmt_ts(min(future_ts)))
+						self["description_text"].setText(_b("\n".join(lines)))
+					else:
+						self["description_text"].setText(_b(""))
+				else:
+					self["description_text"].setText(_b(""))
+			elif self.mode == MODE_EPISODES:
+				self._update_blue_hint()
+				self._update_info_hint()
+				self._update_ep_sort_hint()
+				if idx is not None and idx < len(self.cur_episodes):
+					item = self.cur_episodes[idx]
+					try:
+						title = item["title"].decode("utf-8", "replace") if isinstance(item["title"], bytes) else item["title"]
+					except Exception:
+						title = str(item["title"])
+					desc = item.get("description") or _b("Keine Beschreibung verfügbar.")
+					dur = item.get("duration", "Unbekannt")
+					quality = item.get("quality")
+					if quality:
+						bracket = _b(quality) + (_b(" · ") + _b(dur) if dur else _b(""))
+					else:
+						bracket = _b(dur)
+					full_text = _b(title) + _b("\n\n[") + bracket + _b("]\n\n") + _b(desc)
+					ts = item.get("timestamp", 0)
+					if ts:
+						import time as _time
+						t = _time.localtime(ts)
+						ts_str = "%02d.%02d.%02d %d:%02d" % (t.tm_mday, t.tm_mon, t.tm_year % 100, t.tm_hour, t.tm_min)
+						ts_label = "Geplant" if ts > _time.time() else "Hinzugefügt"
+						full_text = full_text + _b("\n\n" + ts_label + ": " + ts_str)
+					self["description_text"].setText(full_text)
+		except Exception:
+			pass
+
+	def _force_first_desc(self):
+		"""Einmaliger Timer-Callback: erzwingt Beschreibung nach Rendering."""
+		self.last_index = -2
+		self._update_desc()
+
+	# Sender mit zu wenigen Eintraegen fuer "Sendung verpasst?" / "Demnaechst" (< 50/Woche)
+	_NO_SN_SOURCES = frozenset([
+		"Radio Bremen", "funk", "DW", "ZDF Info", "ZDF Neo",
+		"KiKA", "tagesschau24", "ORF", "SRF",
+	])
+
+	def _sv_sn_offset(self):
+		"""Offset der echten Gruppen in der MenuList — 1 oder 2 wenn SV/SN eingeblendet, sonst 0."""
+		if self.current_search:
+			return 0
+		if self.alpha_letter:
+			return 0
+		if self.force_uhd:
+			return 0
+		if self.source_name in ("Meine Favoriten", "Alle Mediatheken"):
+			return 0
+		if self.source_name in self._NO_SN_SOURCES:
+			return 1  # nur SV
+		return 2  # SV + SN
+
+	def _show_groups(self, restore_pos=False):
+		# UHD-Direktmodus: Gruppenansicht komplett überspringen
+		if self.force_uhd and self.groups_filtered:
+			self._loaded = True
+			self._start_episode_fetch(0)
+			return
+
+		self.mode = MODE_GROUPS
+		self._loaded = True
+		self.last_index = -1
+		self._update_sort_label()
+		# Sondereinträge nur bei echten Mediatheken, nicht bei Favoriten, "Alle" oder aktiver Suche
+		offset = self._sv_sn_offset() if not self.current_search else 0
+		if offset == 2:
+			entries = [_SV_ENTRY, _SN_ENTRY]
+		elif offset == 1:
+			entries = [_SV_ENTRY]
+		else:
+			entries = []
+		for gname, gitems in self.groups_filtered:
+			# Keine Zahlen mehr in der Vorschau anhängen
+			entries.append(_b(gname))
+		self._set_list(entries)
+
+		if self._sv_mode:
+			status_text = "Sendung verpasst? — %d Sendungen" % len(self.groups_filtered)
+		elif self._sn_mode:
+			status_text = "Demnächst — %d Sendungen" % len(self.groups_filtered)
+		else:
+			status_text = "%d Sendungen" % len(self.groups_filtered)
+		if self.current_search:
+			status_text += " (Suche: %s)" % self.current_search
+		elif self.alpha_letter:
+			status_text += "  [%s]" % self.alpha_letter
+		self["status_label"].setText(_b(status_text))
+
+		# Keine Gruppen-Favoriten aber Episoden-Favoriten vorhanden → direkt wechseln.
+		# Nur wenn der User nicht explizit die Gruppen-Ansicht gewählt hat (Yellow-Button).
+		if (self.source_name == "Meine Favoriten" and not self._fav_sort_mode and not self.groups_filtered and self._fav_allow_auto_switch and get_episode_favorites()):
+			self._fav_show_episodes = True
+			self._show_episode_favorites()
+			return
+
+		if self._fav_sort_mode:
+			# Im Sortiermodus: Hints werden von _fav_update_hints gesetzt
+			self._fav_update_hints()
+		else:
+			self._update_red_hint()
+			current = self._current_sort_label()
+			next_hint = self._next_sort_hint()
+			if next_hint:
+				self["hint_green"].setText(_b(current + " > " + next_hint))
+			else:
+				self["hint_green"].setText(_b(current))
+			if self.source_name != "Meine Favoriten":
+				self["hint_yellow"].setText("Suche (Server)")
+				self._update_blue_hint()
+			else:
+				self._fav_update_hints()
+				self._update_blue_hint()
+
+		self["hint_info"].setText(_b(""))
+		self._update_page_hint()
+		pos = self.cur_group_idx if restore_pos and self.cur_group_idx is not None else 0
+		scroll = self.cur_group_scroll if restore_pos and self.cur_group_idx is not None else None
+		self._list_focus(pos, scroll=scroll)
+		self.last_index = -2
+		# Einmaliger Timer: nach 300ms nochmals erzwingen, damit VTi das Widget
+		# tatsaechlich neu zeichnet (setText direkt nach setList wird ignoriert).
+		try:
+			self._first_desc_timer.stop()
+		except Exception:
+			pass
+		self._first_desc_timer = eTimer()
+		self._first_desc_timer.callback.append(self._force_first_desc)
+		self._first_desc_timer.start(300, True)
+
+	def _prefetch_sv_sn(self, mode):
+		"""Laedt bis zu 1000 Eintraege bevor SV/SN-Datepicker geoeffnet wird."""
+		SV_SN_FETCH_SIZE = 1000
+		if len(self.all_items) >= SV_SN_FETCH_SIZE:
+			# Genug Daten vorhanden
+			if mode == "sv":
+				self._open_sv_date_picker()
+			else:
+				self._open_sn_date_picker()
+			return
+		if self._fetching:
+			if self._fetch_target == "sv_sn_prefetch":
+				# Prefetch laeuft bereits — Ergebnis wird in _on_sv_sn_prefetch_done verarbeitet
+				self._sv_sn_pending = mode
+			# Anderer Fetch laeuft (z.B. Gruppen) — SV/SN erst nach Fertigstellung starten
+			return
+		self["status_label"].setText("Lade Sendungen ...")
+		self._fetching = True
+		self._fetch_target = "sv_sn_prefetch"
+		self._sv_sn_pending = mode
+		self._fetch_result = []
+		self._fetch_error = None
+		t = Thread(target=self._sv_sn_prefetch_thread, args=(SV_SN_FETCH_SIZE,))
+		t.daemon = True
+		t.start()
+		if self._poll_timer:
+			self._poll_timer.start(300, True)
+
+	def _sv_sn_prefetch_thread(self, size):
+		try:
+			self._fetch_result, self._fetch_total, _rc = self.loader(
+				offset=0,
+				size=size,
+				search_term=None,
+				min_duration=0,
+				sort_by="timestamp",
+			)
+		except Exception:
+			self._fetch_error = _fmt_exc()
+		self._fetching = False
+
+	def _on_sv_sn_prefetch_done(self):
+		if self._fetch_error:
+			_log("SV/SN Prefetch Fehler: " + self._fetch_error)
+			self["status_label"].setText("Fehler beim Laden!")
+			return
+		self.all_items = self._fetch_result
+		self.groups = _build_groups(self.all_items, self.sort_mode)
+		self.groups_filtered = list(self.groups)
+		self._show_groups()
+		if getattr(self, "_sv_sn_pending", None) == "sv":
+			self._open_sv_date_picker()
+		else:
+			self._open_sn_date_picker()
+
+	def _open_sv_date_picker(self):
+		import time as _time
+		_WEEKDAYS = [
+			"Montag", "Dienstag", "Mittwoch", "Donnerstag",
+			"Freitag", "Samstag", "Sonntag",
+		]
+		choices = []
+		now = _time.localtime()
+		# Mitternacht des heutigen Tages als Ankerpunkt — vermeidet Sommerzeit-Fehler
+		today_midnight = int(_time.mktime((now.tm_year, now.tm_mon, now.tm_mday, 0, 0, 0, 0, 0, -1)))
+		all_items = getattr(self, "all_items", []) or []
+		for i in range(8):
+			day_ts = today_midnight - i * 86400
+			t = _time.localtime(day_ts)
+			ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
+			dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
+			start_ts = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+			end_ts = start_ts + 86399
+			count = sum(1 for item in all_items if start_ts <= item.get("timestamp", 0) <= end_ts)
+			if i == 0:
+				label = _b("Heute (%s) - %d" % (dsp, count))
+			elif i == 1:
+				label = _b("Gestern (%s) - %d" % (dsp, count))
+			else:
+				wd = _WEEKDAYS[t.tm_wday]
+				label = wd + _b(" (%s) - %d" % (dsp, count))
+			choices.append((label, ds))
+		self.session.openWithCallback(
+			self._on_sv_date_chosen,
+			OeMediathekPickerScreen,
+			title="Sendung verpasst? — Datum wählen:",
+			choices=choices,
+		)
+
+	def _on_sv_date_chosen(self, date_str):
+		if not date_str:
+			return
+		try:
+			import time as _time
+			parts = date_str.split("-")
+			y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+			# Mitternacht bis 23:59:59 in der Lokalzeit der Box
+			start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
+			end_ts = start_ts + 86399
+		except Exception:
+			self["status_label"].setText(_b("Datum ungueltig!"))
+			return
+
+		filtered = [item for item in self.all_items if start_ts <= item.get("timestamp", 0) <= end_ts]
+
+		self._sv_mode = True
+		self._sv_sn_items = filtered
+		if not filtered:
+			self.groups_filtered = []
+			self._show_groups()
+			self["status_label"].setText(_b("Keine Sendungen am %s" % date_str))
+			return
+
+		self._show_sv_sn_flat(date_str)
+
+	def _open_sn_date_picker(self):
+		import time as _time
+		_WEEKDAYS = [
+			"Montag", "Dienstag", "Mittwoch", "Donnerstag",
+			"Freitag", "Samstag", "Sonntag",
+		]
+		choices = []
+		now = _time.localtime()
+		today_midnight = int(_time.mktime((now.tm_year, now.tm_mon, now.tm_mday, 0, 0, 0, 0, 0, -1)))
+		all_items = getattr(self, "all_items", []) or []
+		for i in range(1, 8):
+			day_ts = today_midnight + i * 86400
+			t = _time.localtime(day_ts)
+			ds = "%04d-%02d-%02d" % (t.tm_year, t.tm_mon, t.tm_mday)
+			dsp = "%02d.%02d.%04d" % (t.tm_mday, t.tm_mon, t.tm_year)
+			start_ts = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+			end_ts = start_ts + 86399
+			count = sum(1 for item in all_items if start_ts <= item.get("timestamp", 0) <= end_ts)
+			if i == 1:
+				label = _b("Morgen (%s) - %d" % (dsp, count))
+			else:
+				wd = _WEEKDAYS[t.tm_wday]
+				label = wd + _b(" (%s) - %d" % (dsp, count))
+			choices.append((label, ds))
+		self.session.openWithCallback(
+			self._on_sn_date_chosen,
+			OeMediathekPickerScreen,
+			title="Demnächst — Datum wählen:",
+			choices=choices,
+		)
+
+	def _on_sn_date_chosen(self, date_str):
+		if not date_str:
+			return
+		try:
+			import time as _time
+			parts = date_str.split("-")
+			y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+			# Mitternacht bis 23:59:59 in der Lokalzeit der Box
+			start_ts = int(_time.mktime((y, m, d, 0, 0, 0, 0, 0, -1)))
+			end_ts = start_ts + 86399
+		except Exception:
+			self["status_label"].setText(_b("Datum ungueltig!"))
+			return
+
+		filtered = [item for item in self.all_items if start_ts <= item.get("timestamp", 0) <= end_ts]
+
+		self._sn_mode = True
+		self._sv_sn_items = filtered
+		if not filtered:
+			self.groups_filtered = []
+			self._show_groups()
+			self["status_label"].setText(_b("Keine Sendungen am %s" % date_str))
+			return
+
+		self._show_sv_sn_flat(date_str)
+
+	def _sv_reset(self):
+		"""SV/SN-Filter aufheben — zurück zur vollständigen Gruppenansicht."""
+		self._sv_mode = False
+		self._sn_mode = False
+		self.groups_filtered = _relevance_sort(self.groups, self.current_search)
+		self._show_groups()
+
+	def _show_sv_sn_flat(self, date_str):
+		"""Zeigt SV/SN-Items direkt als flache Episodenliste, ohne Gruppen-Zwischenschritt."""
+		self._sv_sn_date_str = date_str
+		if self._ep_sort_mode == "title":
+			# Sortierschluessel MUSS exakt dem Anzeigetext entsprechen (inkl. Topic-
+			# Praefix) - sonst landen Episoden wie bei "Der Elefant" (Topic steht nicht
+			# im Titel, wird beim Anzeigen vorangestellt) an der falschen Position,
+			# weil nach dem reinen Titel statt dem sichtbaren Text sortiert wuerde.
+			def _sk(i):
+				lb = _episode_label(i["title"], i.get("group"), season=i.get("season"), episode=i.get("episode"))
+				try:
+					return lb.decode("utf-8", "replace").lower()
+				except Exception:
+					return str(lb).lower()
+			items = sorted(self._sv_sn_items, key=_sk)
+		else:
+			items = sorted(self._sv_sn_items, key=lambda i: i.get("timestamp", 0))
+		self.mode = MODE_EPISODES
+		self.cur_episodes = items
+		self.cur_group_name = ""
+		self.ep_page = 0
+		self.ep_total = len(items)
+		self.ep_has_more = False
+		self._ep_next_api_offset = 0
+
+		self["title_label"].setText(_b(self.source_name) + " | " + _b(date_str))
+		self._set_list([
+			_episode_label(i["title"], i.get("group"), watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode"))
+			for i in items
+		])
+		self["status_label"].setText(_b("%d Sendungen" % len(items)))
+		self["sort_label"].setText(_b("A-Z" if self._ep_sort_mode == "title" else "nach Uhrzeit"))
+		self["hint_red"].setText(_b("Download"))
+		self._set_hint_menu("MENU = Sammel-Download")
+		self["hint_yellow"].setText(_b("Suche (Server)"))
+		self["hint_blue"].setText(_b("Favorit"))
+		self["hint_page"].setText(_b(""))
+		self._update_ep_sort_hint()
+		self._update_info_hint()
+		self._list_focus(0)
+		self.last_index = -2
+
+	def _update_page_hint(self):
+		if self.mode == MODE_EPISODES:
+			if self.ep_has_more:
+				self["hint_page"].setText("CH+/- Seite %d" % (self.ep_page + 1))
+			elif self.ep_page > 0:
+				self["hint_page"].setText("Seite %d (letzte)" % (self.ep_page + 1))
+			else:
+				self["hint_page"].setText(_b(""))
+			return
+		if self._fav_sort_mode:
+			return
+		if self.source_name == "Meine Favoriten":
+			self["hint_page"].setText(_b(""))
+			return
+		if self._sv_mode or self._sn_mode:
+			self["hint_page"].setText(_b(""))
+			return
+		page_num = self.page + 1
+		has_more = self._paged_has_more if self._paged_total > 0 else self._has_more
+		if not has_more:
+			page_info = "Seite %d (letzte)" % page_num
+		else:
+			page_info = "CH+/- Seite %d" % page_num
+		self["hint_page"].setText(page_info)
+
+	def _start_episode_fetch(self, group_idx, reset_sort=True):
+		if self._fetching:
+			return
+		if reset_sort:
+			self._ep_sort_mode = "timestamp"
+		self.mode = MODE_EPISODES
+		self.last_index = -1
+		self.cur_group_idx = group_idx + self._sv_sn_offset()
+		self.cur_group_scroll = self._list_scroll
+		self.ep_page = 0
+		self.ep_total = 0
+		self.ep_has_more = False
+		self._ep_next_api_offset = 0
+		self.sort_mode = "timestamp"
+		self._fetching = True
+		self._fetch_target = "episodes"
+		self._fetch_episodes_result = []
+
+		gname, gitems = self.groups_filtered[group_idx]
+		self.cur_group_name = gname
+
+		group_str = _u(gname)
+
+		title_text = _u(self.source_name) + " | " + _u(group_str)
+		self["title_label"].setText(title_text)
+
+		# Favoriten haben ohnehin schon alle lokalen Folgen geladen (bis zu 500)
+		if self.source_name != "Meine Favoriten":
+			self["status_label"].setText("Lade alle Folgen ...")
+
+		self._set_list([])
+
+		self["description_text"].setText(_b(""))
+
+		self._update_red_hint()
+		self._update_page_hint()
+
+		t = Thread(target=self._fetch_episodes_thread, args=(gname, gitems))
+		t.daemon = True
+		t.start()
+		if self._poll_timer:
+			self._poll_timer.start(300, True)
+
+	def _fetch_episodes_thread(self, gname, local_items):
+		try:
+			# UHD-Modus: pre-verifizierte Episoden direkt verwenden, kein MVW-Refetch
+			if self.force_uhd and local_items:
+				self._fetch_episodes_result = list(local_items)
+				self._fetch_error = None
+				self._fetching = False
+				return
+
+			try:
+				raw_str = gname.decode("utf-8", "replace")
+			except Exception:
+				raw_str = str(gname)
+
+			if ": " in raw_str:
+				pure_topic = raw_str.split(": ", 1)[1]
+			else:
+				pure_topic = raw_str
+
+			api_sort = "title" if self._ep_sort_mode == "title_all" else "timestamp"
+
+			ch = None
+			if local_items:
+				ch_bytes = local_items[0].get("channel", "") or ""
+				ch = _u(ch_bytes) or None
+
+			# ZDF UHD Favoriten: lokale UHD-Items direkt verwenden, kein MVW-Refetch
+			if local_items and ch == "ZDF UHD":
+				self._fetch_episodes_result = list(local_items)
+				self._fetch_error = None
+				self._fetching = False
+				return
+			if ch == "ZDF UHD":
+				ch = "ZDF"
+
+			# Adaptiver Fetch: solange nachladen bis PAGE_SIZE Treffer gesammelt
+			# oder keine weiteren Daten mehr kommen. Jeder Schritt laedt PAGE_SIZE
+			# Eintraege, da AD/GS-Filter viele rauswirft.
+			exact_items = []
+			api_offset = self._ep_next_api_offset
+			total = 0
+			last_res_full = False
+			max_rounds = 10
+			max_exact = 1000 if self._ep_sort_mode == "title" else PAGE_SIZE
+			for _ in range(max_rounds):
+				res, total, raw_cnt = _mvw_query(
+					channel=ch,
+					offset=api_offset,
+					size=PAGE_SIZE,
+					search_term=pure_topic,
+					min_duration=self.min_duration,
+					sort_by=api_sort,
+					search_fields=["topic"],
+				)
+				for item in res:
+					ig = item.get("group", "")
+					ig_str = _u(ig)
+					# Sender-Prefix aus dem API-group_key herausrechnen (z.B. "ARD: Sportschau" → "Sportschau"),
+					# damit der Vergleich auch ohne Channel-Filter funktioniert (A-Z bei "Alle Mediatheken").
+					ig_pure = ig_str.split(": ", 1)[-1] if ": " in ig_str else ig_str
+					if ig_str == (pure_topic if ch else raw_str) or ig_pure == pure_topic:
+						exact_items.append(item)
+				api_offset += PAGE_SIZE
+				last_res_full = (raw_cnt >= PAGE_SIZE)
+				if not last_res_full:
+					break
+				if len(exact_items) >= max_exact:
+					break
+
+			self.ep_total = total
+			self._ep_api_has_more = last_res_full
+			self._ep_next_api_offset = api_offset
+
+			if not exact_items:
+				exact_items = list(local_items)
+
+			self._fetch_episodes_result = exact_items
+			self._fetch_error = None
+		except Exception:
+			self._fetch_episodes_result = list(local_items)
+			self._fetch_error = _fmt_exc()
+		self._fetching = False
+
+	def _on_episodes_fetch_done(self):
+		if self._fetch_error:
+			_log("Episoden Fetch Fehler: " + str(self._fetch_error))
+
+		is_direct_hits = self.cur_group_name.startswith(">> Direkte Treffer")
+		show_group = is_direct_hits or self.source_name == "Meine Favoriten"
+
+		if self._ep_sort_mode == "title":
+			# Sortierschluessel MUSS exakt dem Anzeigetext entsprechen (inkl. Topic-
+			# Praefix bei show_group) - siehe _show_sv_sn_flat fuer denselben Fix.
+			def _sort_key(i):
+				lb = _episode_label(i["title"], i.get("group") if show_group else None, season=i.get("season"), episode=i.get("episode"))
+				try:
+					return lb.decode("utf-8", "replace").lower()
+				except Exception:
+					return str(lb).lower()
+			self.cur_episodes = sorted(self._fetch_episodes_result, key=_sort_key)
+			self.ep_has_more = False
+		else:
+			self.cur_episodes = self._fetch_episodes_result
+			self.ep_has_more = getattr(self, "_ep_api_has_more", False)
+
+		self._set_list([_episode_label(i["title"], i.get("group") if show_group else None, watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes])
+
+		if self.ep_total > 0 and (self.ep_has_more or self.ep_page > 0):
+			self["status_label"].setText(_b("%d  ·  ~%d gesamt" % (len(self.cur_episodes), self.ep_total)))
+		else:
+			self["status_label"].setText("%d Folgen" % len(self.cur_episodes))
+		if self._ep_sort_mode == "title":
+			_ep_sort_lbl = "A-Z lokal (1000)"
+		elif self._ep_sort_mode == "title_all":
+			_ep_sort_lbl = "A-Z (alle)"
+		else:
+			_ep_sort_lbl = "Neueste zuerst"
+		self["sort_label"].setText(_b(_ep_sort_lbl))
+
+		self["hint_red"].setText(_b("Download"))
+		self._set_hint_menu("MENU = Sammel-Download")
+		if self.source_name != "Meine Favoriten":
+			self["hint_yellow"].setText("Suche (Server)")
+		else:
+			self["hint_yellow"].setText(_b(""))
+		self["hint_blue"].setText(_b("Favorit"))
+		self._update_ep_sort_hint()
+
+		self._update_page_hint()
+		self._update_info_hint()
+		self._list_focus(0)
+		self.last_index = -2
+		try:
+			self._first_desc_timer.stop()
+		except Exception:
+			pass
+		self._first_desc_timer = eTimer()
+		self._first_desc_timer.callback.append(self._force_first_desc)
+		self._first_desc_timer.start(300, True)
+
+	def _set_list(self, items):
+		self._list_items = list(items)
+		self._list_sel = 0
+		self._list_scroll = 0
+		self._render_list()
+
+	def _get_list_index(self):
+		if not self._list_items:
+			return None
+		return self._list_sel
+
+	def _list_focus(self, idx, scroll=None):
+		if not self._list_items:
+			return
+		self._list_sel = max(0, min(idx, len(self._list_items) - 1))
+		if scroll is not None:
+			self._list_scroll = max(0, scroll)
+		if self._list_sel < self._list_scroll:
+			self._list_scroll = self._list_sel
+		elif self._list_sel >= self._list_scroll + _LIST_ROWS:
+			self._list_scroll = self._list_sel - _LIST_ROWS + 1
+		self._list_scroll = max(0, self._list_scroll)
+		self._render_list()
+
+	def _render_list(self):
+		total = len(self._list_items)
+		if total == 0:
+			self._list_sel = self._list_scroll = 0
+		else:
+			self._list_sel = max(0, min(self._list_sel, total - 1))
+			if self._list_sel < self._list_scroll:
+				self._list_scroll = self._list_sel
+			elif self._list_sel >= self._list_scroll + _LIST_ROWS:
+				self._list_scroll = self._list_sel - _LIST_ROWS + 1
+			# Kein oberes Clamping auf total-_LIST_ROWS: die letzte Seite darf
+			# eine echte, nicht zurueckgezogene Teil-Seite sein (leere Zeilen
+			# statt Ueberlappung mit der vorherigen Seite), siehe _list_step().
+			self._list_scroll = max(0, self._list_scroll)
+		for i in range(_LIST_ROWS):
+			abs_idx = self._list_scroll + i
+			if abs_idx < total:
+				item = self._list_items[abs_idx]
+				if isinstance(item, bytes):
+					try:
+						item = item.decode("utf-8", "replace")
+					except Exception:
+						item = str(item)
+				if item.startswith("* "):
+					if self._dot_pix:
+						try:
+							self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
+						except Exception:
+							pass
+					self["list_dot_%d" % i].show()
+					item = item[2:]
+				elif self.mode == MODE_GROUPS and is_favorite(_b(item)):
+					if self._fav_pix:
+						try:
+							self["list_dot_%d" % i].instance.setPixmap(self._fav_pix)
+						except Exception:
+							pass
+					self["list_dot_%d" % i].show()
+				elif self.mode == MODE_EPISODES and abs_idx < len(self.cur_episodes):
+					ep = self.cur_episodes[abs_idx]
+					url = ep.get("stream_url_hd", "") or ep.get("stream_url_sd", "")
+					if url and is_episode_favorite(url):
+						if self._fav_pix:
+							try:
+								self["list_dot_%d" % i].instance.setPixmap(self._fav_pix)
+							except Exception:
+								pass
+						self["list_dot_%d" % i].show()
+					else:
+						self["list_dot_%d" % i].hide()
+				else:
+					self["list_dot_%d" % i].hide()
+				if self.mode == MODE_EPISODES and abs_idx < len(self.cur_episodes):
+					ep = self.cur_episodes[abs_idx]
+					if self.force_uhd:
+						base = _episode_stream_url(ep)
+						cands = uhd_url_candidates(base) if base else [base]
+						dl_pending = any(_is_download_pending(c) for c in cands) or _is_download_pending(base)
+					else:
+						dl_pending = _is_download_pending(_episode_stream_url(ep, prefer_720p=(get_download_quality() == "720p")))
+					if dl_pending:
+						self["list_dl_%d" % i].show()
+					else:
+						self["list_dl_%d" % i].hide()
+				else:
+					self["list_dl_%d" % i].hide()
+				self["list_label_%d" % i].setText(_b(item))
+				self["list_label_%d" % i].show()
+				if abs_idx == self._list_sel:
+					self["list_sel_%d" % i].show()
+				else:
+					self["list_sel_%d" % i].hide()
+			else:
+				self["list_sel_%d" % i].hide()
+				self["list_label_%d" % i].hide()
+				self["list_dot_%d" % i].hide()
+				self["list_dl_%d" % i].hide()
+		if self.mode == MODE_EPISODES:
+			self._update_red_hint()
+		_update_scrollbar_widget(
+			self,
+			1142 if IS_FHD else 766,
+			150 if IS_FHD else 97,
+			58 if IS_FHD else 38,
+			_LIST_ROWS,
+		)
+		self._sync_dl_poll()
+
+	def _sync_dl_poll(self):
+		pending = self.mode == MODE_EPISODES and bool(
+			_download_queue or (_active_downloader and _active_downloader._thread and _active_downloader._thread.is_alive()))
+		if pending:
+			if not getattr(self, "_dl_poll_timer", None):
+				self._dl_poll_timer = eTimer()
+				self._dl_poll_timer.callback.append(self._poll_dl_icons)
+			self._dl_poll_timer.start(2000, True)
+		elif getattr(self, "_dl_poll_timer", None):
+			try:
+				self._dl_poll_timer.stop()
+			except Exception:
+				pass
+
+	def _poll_dl_icons(self):
+		self._render_list()
+
+	def _list_step(self, step):
+		total = len(self._list_items)
+		if total == 0:
+			return
+		old_sel = self._list_sel
+		old_scroll = self._list_scroll
+		new_sel = (old_sel + step) % total
+		self._list_sel = new_sel
+		if self._list_sel < old_scroll or self._list_sel >= old_scroll + _LIST_ROWS:
+			# Beim Verlassen der sichtbaren Seite springt der neue Eintrag an den
+			# Seitenrand in Bewegungsrichtung (Systemlisten-Verhalten: runter ->
+			# Eintrag oben, hoch -> Eintrag unten), statt zeilenweise mit dem
+			# Cursor am Rand kleben zu bleiben. Deckt Wrap-around automatisch mit ab.
+			if step > 0:
+				self._list_scroll = self._list_sel
+			else:
+				self._list_scroll = self._list_sel - _LIST_ROWS + 1
+		# Kein oberes Clamping auf total-_LIST_ROWS: die letzte Seite darf eine
+		# echte, nicht zurueckgezogene Teil-Seite sein (leere Zeilen unterhalb
+		# des letzten Eintrags statt Ueberlappung mit der vorherigen Seite).
+		self._list_scroll = max(0, self._list_scroll)
+		if self._list_scroll != old_scroll:
+			self._render_list()
+		else:
+			old_row = old_sel - old_scroll
+			new_row = self._list_sel - self._list_scroll
+			if 0 <= old_row < _LIST_ROWS:
+				self["list_sel_%d" % old_row].hide()
+			if 0 <= new_row < _LIST_ROWS:
+				self["list_sel_%d" % new_row].show()
+		# hint_red haengt vom Pending-Status der jeweils markierten Folge ab
+		# (siehe on_download/_cancel_pending_download) - ohne diesen Aufruf
+		# bleibt "Download abbrechen" beim Weiterblaettern faelschlich stehen.
+		if self.mode == MODE_EPISODES:
+			self._update_red_hint()
+
+	def _enqueue_single_episode(self, item, callback, target_dir=None):
+		"""Loest die Stream-URL einer Episode auf und reiht sie in die
+		Download-Queue ein. Ruft callback(state) GENAU EINMAL auf, state ist
+		"started"/"queued"/"duplicate"/"failed" - bei ZDF UHD (force_uhd)
+		asynchron per Hintergrund-Thread + reactor.callFromThread, sonst
+		synchron. Gemeinsame Basis fuer Einzel- (on_download) und
+		Sammel-Downloads (_do_bulk_download). target_dir wird bei Sammel-Downloads
+		und optional bei Einzel-Downloads gesetzt (Unterordner pro Sendung)."""
+		try:
+			if self.force_uhd:
+				base = _episode_stream_url(item)
+				if not base:
+					callback("failed")
+					return
+				desc = item.get("description", "")
+				dur = item.get("duration", "")
+				dl_topic = item.get("group") or self.cur_group_name if self.cur_group_name.startswith(">> Direkte Treffer") else self.cur_group_name
+				_title = _download_title(item["title"], item.get("season"), item.get("episode"))
+				_web = item.get("url_website", "")
+
+				def _enqueue_uhd(_u=base, _tl=_title, _dt=dl_topic, _d=desc, _dr=dur, _w=_web, _cb=callback, _td=target_dir):
+					from twisted.internet import reactor
+					try:
+						final = (resolve_uhd_url_via_document_api(_w) if _w else None) or resolve_uhd_url(_u)
+					except Exception:
+						final = _u
+
+					def _do():
+						state = _enqueue_download(_tl, final, _dt, _d, _dr, target_dir=_td)
+						_cb(state)
+					reactor.callFromThread(_do)
+				t = Thread(target=_enqueue_uhd)
+				t.daemon = True
+				t.start()
+				return
+
+			url = _episode_stream_url(item, prefer_720p=(get_download_quality() == "720p"))
+			if not url:
+				callback("failed")
+				return
+
+			desc = item.get("description", "")
+			dur = item.get("duration", "")
+			dl_topic = item.get("group") or self.cur_group_name if self.cur_group_name.startswith(">> Direkte Treffer") else self.cur_group_name
+
+			state = _enqueue_download(_download_title(item["title"], item.get("season"), item.get("episode")), url, dl_topic, desc, dur, target_dir=target_dir)
+			callback(state)
+		except Exception:
+			_log("_enqueue_single_episode Fehler: " + _fmt_exc())
+			callback("failed")
+
+	def on_download(self):
+		if self.mode != MODE_EPISODES:
+			return
+		idx = self._get_list_index()
+		if idx is None or idx >= len(self.cur_episodes):
+			return
+		item = self.cur_episodes[idx]
+
+		# Laeuft dieser Download bereits (aktiv oder in der Warteschlange)?
+		# Dann bricht Rot ihn stattdessen ab, statt einen Duplikat-Hinweis zu
+		# zeigen. Nur fuer den Normalfall, nicht bei ZDF UHD (force_uhd) -
+		# dort ist die tatsaechlich eingereihte URL erst nach der
+		# asynchronen Document-API-Aufloesung bekannt, ein Pending-Check
+		# vorher ist nicht zuverlaessig moeglich.
+		if not self.force_uhd:
+			url = _episode_stream_url(item, prefer_720p=(get_download_quality() == "720p"))
+			if url and _is_download_pending(url):
+				self._cancel_pending_download(url)
+				return
+
+		def _done(state):
+			if state == "duplicate":
+				self._show_toast("Bereits in der Warteschlange")
+			elif state == "queued":
+				self._show_toast("Zur Warteschlange hinzugefügt", added=True)
+			elif state == "started":
+				self._show_toast("Download gestartet", added=True)
+			else:
+				self["status_label"].setText(_b("Kein Stream verfügbar"))
+				return
+			self._update_red_hint()
+			self._render_list()
+
+		target_dir = None
+		if get_download_subfolder():
+			show = _u(item.get("group") or self.cur_group_name)
+			if show and not show.startswith(">> "):
+				target_dir = _show_target_dir(show)[0]
+		self._enqueue_single_episode(item, _done, target_dir=target_dir)
+
+	def _cancel_pending_download(self, url):
+		"""Bricht einen bereits laufenden oder wartenden Download ab (per
+		URL) - Gegenstueck zum Enqueue in on_download()."""
+		active_thread = _active_downloader._thread if _active_downloader else None
+		was_active = (_active_downloader is not None and _active_downloader.url == url and active_thread is not None and active_thread.is_alive())
+		if was_active:
+			_cancel_current_download()
+			self._show_toast("Download wird abgebrochen", added=False)
+		elif _cancel_queued_download(url):
+			self._show_toast("Aus Warteschlange entfernt", added=False)
+		else:
+			self._show_toast("Bereits abgeschlossen")
+		self._update_red_hint()
+		self._render_list()
+		if was_active:
+			# cancel() setzt nur ein Signal - der Downloader-Thread braucht
+			# noch einen Moment, bis er es bemerkt und wirklich stoppt.
+			# _render_list() direkt danach sieht ihn daher oft noch als
+			# aktiv, "Download abbrechen" bliebe faelschlich stehen (der
+			# 2s-Poll in _sync_dl_poll() haette sich zu diesem Zeitpunkt
+			# bereits selbst abgeschaltet). Ein einmaliger Nachtrigger holt
+			# den korrekten Zustand zuverlaessig nach.
+			t = eTimer()
+			t.callback.append(self._render_list)
+			t.start(1000, True)
+			self._cancel_recheck_timer = t
+
+	def on_download_menu(self):
+		"""Choose all, one season, or only marked episodes for a bulk download."""
+		if self.mode != MODE_EPISODES or not self.cur_episodes or getattr(self, "_download_menu_open", False):
+			return
+		seasons = sorted({_effective_season(x) for x in self.cur_episodes} - {None})
+		marked = [x for x in self.cur_episodes if is_watched(x.get("stream_url_hd") or x.get("stream_url_sd") or "")]
+		choices = [(f"Alle Einträge dieser Seite downloaden ({len(self.cur_episodes)})", ("page", None))]
+		for season in seasons:
+			count = sum(1 for x in self.cur_episodes if _effective_season(x) == season)
+			choices.append((f"Staffel {season} downloaden ({count} Folgen)", ("season", season)))
+		if marked:
+			choices.append((f"Nur markierte Folgen downloaden ({len(marked)})", ("marked", None)))
+
+		def selected(result):
+			self._download_menu_open = False
+			if not result:
+				return
+			kind, value = result
+			if kind == "page":
+				self._do_bulk_download(list(self.cur_episodes))
+			elif kind == "season":
+				self._do_bulk_download([x for x in self.cur_episodes if _effective_season(x) == value])
+			elif kind == "marked":
+				self._do_bulk_download(marked)
+
+		self._download_menu_open = True
+		self.session.openWithCallback(selected, OeMediathekPickerScreen, "Download-Optionen", choices)
+
+	def _do_bulk_download(self, items):
+		if not items:
+			return
+		indexed = sorted(enumerate(items), key=lambda x: downloadHelper.episodeOrderKey(x[1], x[0]))
+		sortedItems = [x[1] for x in indexed]
+		targetDir, folder = _show_target_dir(self.cur_group_name)
+		counts = {"started": 0, "queued": 0, "duplicate": 0, "failed": 0}
+		remaining = len(sortedItems)
+
+		def oneDone(state):
+			nonlocal remaining
+			counts[state] = counts.get(state, 0) + 1
+			remaining -= 1
+			if remaining <= 0:
+				added = counts["started"] + counts["queued"]
+				message = f'{added} Folgen in Ordner "{folder}" hinzugefügt' if targetDir else f"{added} Folgen zur Warteschlange hinzugefügt"
+				extra = []
+				if counts["duplicate"]:
+					extra.append(f'{counts["duplicate"]} bereits vorhanden')
+				if counts["failed"]:
+					extra.append(f'{counts["failed"]} ohne Stream')
+				if extra:
+					message = f"{message} ({', '.join(extra)})"
+				self._show_toast(message, added=bool(added))
+				self._render_list()
+
+		if self.force_uhd:
+			def bulkUhdWorker():
+				for item in sortedItems:
+					base = _episode_stream_url(item)
+					if not base:
+						reactor.callFromThread(oneDone, "failed")
+						continue
+					description = _u(item.get("description", ""))
+					duration = _u(item.get("duration", ""))
+					groupName = _u(self.cur_group_name)
+					topic = _u(item.get("group") or groupName) if groupName.startswith(">> Direkte Treffer") else groupName
+					title = _download_title(item["title"], item.get("season"), item.get("episode"))
+					website = _u(item.get("url_website", ""))
+					try:
+						finalUrl = (resolve_uhd_url_via_document_api(website) if website else None) or resolve_uhd_url(base)
+					except Exception:
+						finalUrl = base
+
+					def enqueue(title=title, url=finalUrl, topic=topic, description=description, duration=duration):
+						state = _enqueue_download(title, url, topic, description, duration, target_dir=targetDir)
+						oneDone(state)
+					reactor.callFromThread(enqueue)
+
+			# Resolve and queue serially, so network timing cannot reorder episodes.
+			Thread(target=bulkUhdWorker, daemon=True).start()
+		else:
+			for item in sortedItems:
+				self._enqueue_single_episode(item, oneDone, target_dir=targetDir)
+
+	def on_ok(self):
+		try:
+			idx = self._get_list_index()
+			_log("on_ok mode=%d idx=%s" % (self.mode, str(idx)))
+			if idx is None:
+				return
+			# Episode-Favoriten-Sortiermodus: OK = Greifen oder Ablegen
+			if self._ep_fav_sort_mode:
+				if self._ep_fav_grabbed is None:
+					self._ep_fav_grabbed = idx
+					self._list_items = self._ep_fav_list_entries()
+					self._list_focus(idx)
+					self._ep_fav_update_hints()
+				else:
+					self._ep_fav_grabbed = None
+					self._list_items = self._ep_fav_list_entries()
+					self._render_list()
+					self._ep_fav_update_hints()
+				return
+			# Favoriten-Sortiermodus: OK = Greifen oder Ablegen
+			if self._fav_sort_mode:
+				if self._fav_grabbed is None:
+					self._fav_grabbed = idx
+					self._list_items = self._fav_list_entries()
+					self._list_focus(idx)
+					self._fav_update_hints()
+				else:
+					self._fav_grabbed = None
+					self._show_groups(restore_pos=True)
+				return
+			if self.mode == MODE_GROUPS:
+				offset = self._sv_sn_offset()
+				if offset >= 1 and idx == 0:
+					self._prefetch_sv_sn("sv")
+				elif offset == 2 and idx == 1:
+					self._prefetch_sv_sn("sn")
+				elif idx - offset < len(self.groups_filtered):
+					self._start_episode_fetch(idx - offset)
+			else:
+				if idx < len(self.cur_episodes):
+					item = self.cur_episodes[idx]
+
+					if self.force_uhd:
+						base = _episode_stream_url(item)
+						if not base:
+							self["status_label"].setText(_b("Kein Stream verfügbar"))
+							return
+						_title = item["title"]
+						_sess = self.session
+						_web = item.get("url_website", "")
+
+						def _play_uhd(_u=base, _t=_title, _s=_sess, _w=_web):
+							from twisted.internet import reactor
+							try:
+								final = (resolve_uhd_url_via_document_api(_w) if _w else None) or resolve_uhd_url(_u)
+							except Exception:
+								final = _u
+							reactor.callFromThread(play_stream_async, _s, final, _t)
+						t = Thread(target=_play_uhd)
+						t.daemon = True
+						t.start()
+						return
+
+					url_hd = _playable_url(item.get("stream_url_hd", ""))
+					url_sd = _playable_url(item.get("stream_url_sd", ""))
+
+					options = []
+					if url_hd:
+						options.append((_b("Hohe Qualität (1080p)"), url_hd))
+					if url_sd and url_sd != url_hd:
+						options.append((_b("720p"), url_sd))
+
+					sq = get_stream_quality()
+					if len(options) > 1 and sq == "ask":
+						_title = item["title"]
+						self.session.openWithCallback(
+							lambda url, t=_title: self.play_selected_quality(url, t),
+							OeMediathekPickerScreen,
+							title="Qualität wählen:",
+							choices=options,
+						)
+					elif options:
+						url = (url_sd if (url_sd and url_sd != url_hd) else url_hd) if sq == "720p" else (url_hd if url_hd else url_sd)
+						_log("Starte direkt: " + str(item["title"]))
+						play_stream_async(self.session, url, item["title"])
+					else:
+						self["status_label"].setText(_b("Kein Stream gefunden!"))
+						_log("Kein abspielbarer Stream für: " + _u(item["title"]))
+		except Exception:
+			_log("on_ok Fehler: " + _fmt_exc())
+
+	def play_selected_quality(self, url, title):
+		if url:
+			_log("Starte (Auswahl): " + str(title))
+			play_stream_async(self.session, url, title)
+
+	def on_cancel(self):
+		if self._ep_fav_sort_mode:
+			if self._ep_fav_order_backup is not None:
+				self.cur_episodes = list(self._ep_fav_order_backup)
+			self._ep_fav_sort_mode = False
+			self._ep_fav_grabbed = None
+			self._ep_fav_order_backup = None
+			self._list_items = self._ep_fav_list_entries()
+			self._render_list()
+			self._ep_fav_update_hints()
+			return
+		if self._fav_sort_mode:
+			# Sortiermodus abbrechen: Reihenfolge wiederherstellen
+			if self._fav_order_backup is not None:
+				orig = self._fav_order_backup
+				backed = {gname: gitems for gname, gitems in self.groups_filtered}
+				self.groups_filtered = [(g, backed.get(g, [])) for g in orig if g in backed]
+			self._fav_sort_mode = False
+			self._fav_grabbed = None
+			self._fav_order_backup = None
+			self._show_groups()
+			return
+		if self.mode == MODE_EPISODES:
+			if self._fav_show_episodes:
+				self.close()
+				return
+			if self._sv_mode or self._sn_mode:
+				self._sv_reset()
+				return
+			if self.force_uhd:
+				self.close()
+				return
+			self["title_label"].setText(self.source_name)
+			self._show_groups(restore_pos=True)
+			return
+		elif self._sv_mode or self._sn_mode:
+			self._sv_reset()
+		elif self.alpha_letter:
+			self.alpha_letter = None
+			self.page = 0
+			self._paged_total = 0
+			self._paged_has_more = False
+			self._groups_next_api_offset = 0
+			self.all_items = []
+			self.groups = []
+			self.groups_filtered = []
+			self._set_list([])
+			self["description_text"].setText(_b(""))
+			self._start_fetch()
+		else:
+			self.close()
+
+	def on_red(self):
+		if self.mode == MODE_EPISODES:
+			if self._ep_fav_sort_mode:
+				self._ep_fav_toggle_sort_mode()
+				return
+			self.on_download()
+			return
+		elif self.source_name == "Meine Favoriten":
+			self._fav_toggle_sort_mode()
+		else:
+			self.open_alpha_picker()
+
+	# ------------------------------------------------------------------
+	# Favoriten-Sortiermodus
+	# ------------------------------------------------------------------
+	def _fav_toggle_sort_mode(self):
+		if not self._fav_sort_mode:
+			# Sortiermodus einschalten
+			self._fav_sort_mode = True
+			self._fav_grabbed = None
+			self._fav_order_backup = [gname for gname, _ in self.groups_filtered]
+			self._fav_update_hints()
+			self._show_groups(restore_pos=True)
+		else:
+			# Sortiermodus beenden und speichern
+			self._fav_sort_mode = False
+			self._fav_grabbed = None
+			self._fav_order_backup = None
+			reorder_favorites([gname for gname, _ in self.groups_filtered])
+			self._show_toast(_b("Reihenfolge gespeichert"), added=True)
+			self._show_groups()
+
+	def _fav_update_hints(self):
+		if self._fav_sort_mode:
+			self["hint_red"].setText(_b("Fertig"))
+			self._set_hint_menu("")
+			self["hint_green"].setText(_b("Rückgängig"))
+			self["hint_yellow"].setText(_b(""))
+			self["hint_blue"].setText(_b("Favorit löschen"))
+			if self._fav_grabbed is None:
+				self["hint_page"].setText(_b("OK = Greifen"))
+			else:
+				self["hint_page"].setText(_b("OK = Ablegen"))
+		else:
+			self._update_red_hint()
+			self["hint_green"].setText(_b(""))
+			if self._fav_show_episodes:
+				self["hint_yellow"].setText(_b("Folgen > Gruppen"))
+			else:
+				self["hint_yellow"].setText(_b("Gruppen > Folgen"))
+			self["hint_page"].setText(_b(""))
+
+	def _fav_move(self, direction):
+		"""Gegriffenen Favoriten um eine Position nach oben (-1) oder unten (+1) verschieben."""
+		if not self._fav_sort_mode or self._fav_grabbed is None:
+			return
+		idx = self._fav_grabbed
+		new_idx = idx + direction
+		if new_idx < 0 or new_idx >= len(self.groups_filtered):
+			return
+		# Tauschen
+		self.groups_filtered[idx], self.groups_filtered[new_idx] = \
+			self.groups_filtered[new_idx], self.groups_filtered[idx]
+		self._fav_grabbed = new_idx
+		# Liste neu aufbauen und Cursor auf neuer Position setzen
+		self._list_items = self._fav_list_entries()
+		self._list_focus(new_idx)
+
+	def _fav_list_entries(self):
+		"""Erstellt die MenuList-Eintraege fuer den Favoriten-Sortiermodus.
+		Der gegriffene Eintrag bekommt einen Pfeil-Prefix als visuellen Marker."""
+		entries = []
+		for i, (gname, _) in enumerate(self.groups_filtered):
+			if i == self._fav_grabbed:
+				entries.append(_b("» " + _u(gname)))
+			else:
+				entries.append(gname)
+		return entries
+
+	def _list_len(self):
+		if self.mode == MODE_EPISODES:
+			return len(self.cur_episodes)
+		# SV/SN-Sondereinträge sind in der MenuList, aber nicht in groups_filtered
+		return len(self.groups_filtered) + (self._sv_sn_offset() if not self.current_search else 0)
+
+	def on_up(self):
+		if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
+			self._ep_fav_move(-1)
+		elif self._fav_sort_mode and self._fav_grabbed is not None:
+			self._fav_move(-1)
+		else:
+			self._list_step(-1)
+
+	def on_down(self):
+		if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
+			self._ep_fav_move(1)
+		elif self._fav_sort_mode and self._fav_grabbed is not None:
+			self._fav_move(1)
+		else:
+			self._list_step(1)
+
+	def on_page_up(self):
+		if self._fav_sort_mode and self._fav_grabbed is not None:
+			return
+		if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
+			return
+		if not self._list_items:
+			return
+		cur_page = self._list_scroll // _LIST_ROWS
+		if self._list_scroll > 0:
+			new_scroll = max(0, (cur_page - 1) * _LIST_ROWS)
+			new_sel = new_scroll
+		else:
+			new_scroll = 0
+			new_sel = 0
+		self._list_focus(new_sel, scroll=new_scroll)
+
+	def on_page_down(self):
+		if self._fav_sort_mode and self._fav_grabbed is not None:
+			return
+		if self._ep_fav_sort_mode and self._ep_fav_grabbed is not None:
+			return
+		if not self._list_items:
+			return
+		total = len(self._list_items)
+		cur_page = self._list_scroll // _LIST_ROWS
+		next_scroll = (cur_page + 1) * _LIST_ROWS
+		if next_scroll < total:
+			new_scroll = next_scroll
+			new_sel = new_scroll
+		else:
+			new_scroll = self._list_scroll
+			new_sel = total - 1
+		self._list_focus(new_sel, scroll=new_scroll)
+
+	def open_alpha_picker(self):
+		try:
+			self.session.openWithCallback(self.do_alpha_filter, OeMediathekAlphaPickerScreen)
+		except Exception:
+			_log("open_alpha_picker: " + _fmt_exc())
+
+	def do_alpha_filter(self, letter):
+		if letter is None:
+			return
+		_log("Starte ABC Deep-Fetch fuer: " + letter)
+		self.alpha_letter = letter
+		self.page = 0
+		self.mode = MODE_GROUPS
+
+		self["status_label"].setText("Suche '%s' ..." % letter)
+		self._set_list([])
+		self["description_text"].setText(_b(""))
+
+		self._fetching = True
+		self._fetch_target = "alpha"
+		self._fetch_alpha_result = []
+		self._fetch_error = None
+
+		t = Thread(target=self._fetch_alpha_thread, args=(letter,))
+		t.daemon = True
+		t.start()
+		if self._poll_timer:
+			self._poll_timer.start(300, True)
+
+	def _fetch_alpha_thread(self, letter):
+		try:
+			ch = _AZ_CH_MAP.get(self.source_name)
+
+			# Topics direkt vom /api/topics-Endpunkt holen (vollstaendig, auch ohne Sender-Filter)
+			all_topics = get_topics(channel=ch)
+			if letter == "#":
+				filtered_topics = [t for t in all_topics if t[0:1].upper() not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+			else:
+				filtered_topics = [t for t in all_topics if t[0:1].upper() == letter]
+			ch_str = ch or ""
+			self._fetch_alpha_result = [
+				{"group": _u(t), "title": _u(t), "channel": ch_str, "topic": _u(t)}
+				for t in filtered_topics
+			]
+		except Exception:
+			self._fetch_error = _fmt_exc()
+		self._fetching = False
+
+	def _on_alpha_fetch_done(self):
+		if self._fetch_error:
+			_log("Alpha Fetch Fehler: " + str(self._fetch_error))
+			self["status_label"].setText("Fehler bei der Suche!")
+			return
+
+		self._has_more = False
+		self._paged_has_more = False
+		self.groups = _build_groups(self._fetch_alpha_result, self.sort_mode)
+		self.groups_filtered = list(self.groups)
+
+		_log("Alpha Deep-Fetch beendet: %d Gruppen" % len(self.groups_filtered))
+		self._show_groups()
+
+	def toggle_favorite(self):
+		try:
+			idx = self._get_list_index()
+			if idx is None:
+				return
+			# Sondereintraege koennen nicht als Favorit hinzugefuegt werden,
+			# aber falls versehentlich gespeichert: loeschen ermoeglichen
+			offset = self._sv_sn_offset()
+			if idx < offset:
+				return
+			real_idx = idx - offset
+			if real_idx >= len(self.groups_filtered):
+				return
+			gname, gitems = self.groups_filtered[real_idx]
+
+			# Sondergruppen koennen nicht als Favorit gespeichert werden
+			if _u(gname).startswith(">> "):
+				return
+
+			# Kanal direkt aus dem ersten Item der Gruppe lesen — zuverlaessig auch
+			# in der Favoriten-Ansicht und bei "Alle Mediatheken"
+			channel = ""
+			if gitems:
+				channel = gitems[0].get("channel", "") or ""
+
+			if is_favorite(gname):
+				remove_favorite(gname)
+				self._show_toast("Favorit entfernt", added=False)
+				# In der Favoriten-Ansicht den Eintrag sofort aus der Liste entfernen
+				if self.source_name == "Meine Favoriten":
+					self.groups = [(n, i) for n, i in self.groups if n != gname]
+					self.groups_filtered = [(n, i) for n, i in self.groups_filtered if n != gname]
+					self._show_groups()
+					# Cursor auf sinnvolle Position setzen (bleibt beim gleichen Index, clamped)
+					new_len = len(self.groups_filtered)
+					if new_len > 0:
+						new_pos = min(real_idx, new_len - 1)
+						self._list_focus(new_pos)
+			else:
+				add_favorite(gname, channel)
+				self._show_toast("Favorit hinzugefügt!", added=True)
+			self._update_red_hint()
+			self._update_blue_hint()
+			self._render_list()
+		except Exception:
+			_log("toggle_favorite: " + _fmt_exc())
+
+	def _show_toast(self, msg, added=True):
+		try:
+			self._toast_timer.stop()
+			if self._saved_status is None:
+				try:
+					self._saved_status = self["status_label"].getText()
+				except Exception:
+					self._saved_status = ""
+			prefix = "[+] " if added else "[-] "
+			self["status_label"].setText(_b(prefix + msg))
+			self._toast_timer.start(2500, True)
+		except Exception:
+			pass
+
+	def _clear_toast(self):
+		try:
+			if self._saved_status is not None:
+				self["status_label"].setText(_b(self._saved_status))
+				self._saved_status = None
+			else:
+				self["status_label"].setText(_b(""))
+		except Exception:
+			pass
+
+	def _update_info_hint(self):
+		if self.mode != MODE_EPISODES:
+			return
+		try:
+			idx = self._get_list_index()
+			if idx is not None and idx < len(self.cur_episodes):
+				item = self.cur_episodes[idx]
+				url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
+				if url and is_watched(url):
+					self["hint_info"].setText(_b("INFO / EPG\nDemarkieren"))
+					return
+		except Exception:
+			pass
+		self["hint_info"].setText(_b("INFO / EPG\nMarkieren"))
+
+	def _update_ep_sort_hint(self):
+		if self.mode != MODE_EPISODES:
+			return
+		if self.source_name == "Meine Favoriten" and self._fav_show_episodes:
+			return
+		if self.force_uhd and self.zdf_uhd_static:
+			self["hint_green"].setText(_b(""))
+			return
+		if self._sv_mode or self._sn_mode:
+			if self._ep_sort_mode == "timestamp":
+				self["hint_green"].setText(_b("nach Uhrzeit > A-Z"))
+			else:
+				self["hint_green"].setText(_b("A-Z > nach Uhrzeit"))
+			return
+		if self._ep_sort_mode == "timestamp":
+			self["hint_green"].setText(_b("Neueste zuerst > A-Z lokal (1000)"))
+		elif self._ep_sort_mode == "title":
+			self["hint_green"].setText(_b("A-Z lokal (1000) > A-Z (alle)"))
+		else:
+			self["hint_green"].setText(_b("A-Z (alle) > Neueste zuerst"))
+
+	def cycle_ep_sort(self):
+		if self._sv_mode or self._sn_mode:
+			self._ep_sort_mode = "title" if self._ep_sort_mode == "timestamp" else "timestamp"
+			self["description_text"].setText(_b(""))
+			self._show_sv_sn_flat(self._sv_sn_date_str)
+			return
+		if self._ep_sort_mode == "timestamp":
+			self._ep_sort_mode = "title"
+		elif self._ep_sort_mode == "title":
+			self._ep_sort_mode = "title_all"
+		else:
+			self._ep_sort_mode = "timestamp"
+		self.ep_page = 0
+		self._ep_next_api_offset = 0
+		self.ep_has_more = False
+		self._set_list([])
+		self["description_text"].setText(_b(""))
+		self._start_episode_fetch(self.cur_group_idx - self._sv_sn_offset(), reset_sort=False)
+
+	def _update_blue_hint(self):
+		if self.mode == MODE_EPISODES:
+			try:
+				idx = self._get_list_index()
+				if idx is not None and idx < len(self.cur_episodes):
+					item = self.cur_episodes[idx]
+					url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
+					if url and is_episode_favorite(url):
+						self["hint_blue"].setText(_b("Favorit löschen"))
+						return
+			except Exception:
+				pass
+			self["hint_blue"].setText(_b("Favorit"))
+			return
+		try:
+			idx = self._get_list_index()
+			if idx is not None:
+				offset = self._sv_sn_offset()
+				if idx < offset:
+					self["hint_blue"].setText(_b(""))
+					return
+				real_idx = idx - offset
+				if real_idx < len(self.groups_filtered):
+					gname, _ = self.groups_filtered[real_idx]
+					if _u(gname).startswith(">> "):
+						self["hint_blue"].setText(_b(""))
+						return
+					if is_favorite(gname):
+						self["hint_blue"].setText(_b("Favorit löschen"))
+						return
+		except Exception:
+			pass
+		self["hint_blue"].setText(_b("Favorit"))
+
+	def _set_hint_menu(self, text):
+		"""Setzt hint_menu und passt die Groesse/Position von hint_red an -
+		zweizeilig (Status oben, MENU-Hinweis darunter) wenn text gesetzt
+		ist, sonst wieder die volle Zeilenhoehe wie die anderen Farbtasten
+		(z.B. "ABC-Auswahl", "Sortieren"), damit der Text dort nicht nach
+		oben verschoben wirkt."""
+		self["hint_menu"].setText(_b(text))
+		try:
+			if text:
+				if IS_FHD:
+					self["hint_red"].instance.resize(eSize(350, 45))
+					self["hint_red"].instance.move(ePoint(68, 965))
+				else:
+					self["hint_red"].instance.resize(eSize(233, 28))
+					self["hint_red"].instance.move(ePoint(42, 636))
+			else:
+				if IS_FHD:
+					self["hint_red"].instance.resize(eSize(350, 100))
+					self["hint_red"].instance.move(ePoint(68, 960))
+				else:
+					self["hint_red"].instance.resize(eSize(233, 60))
+					self["hint_red"].instance.move(ePoint(42, 634))
+		except Exception:
+			pass
+
+	def _update_red_hint(self):
+		if self._ep_fav_sort_mode:
+			# Waehrend des Episoden-Favoriten-Sortiermodus verwaltet
+			# _ep_fav_update_hints() Rot ("Fertig") selbst - _render_list()
+			# ruft diese Funktion aber unconditional bei MODE_EPISODES auf,
+			# ohne diesen Guard wuerde sie "Fertig" sofort wieder auf
+			# "Download" zuruecksetzen.
+			return
+		if self.mode == MODE_EPISODES:
+			try:
+				idx = self._get_list_index()
+				if idx is not None and idx < len(self.cur_episodes) and not self.force_uhd:
+					item = self.cur_episodes[idx]
+					url = _episode_stream_url(item, prefer_720p=(get_download_quality() == "720p"))
+					if url and _is_download_pending(url):
+						self["hint_red"].setText(_b("Download abbrechen"))
+						self._set_hint_menu("MENU = Sammel-Download")
+						return
+			except Exception:
+				pass
+			self["hint_red"].setText(_b("Download"))
+			self._set_hint_menu("MENU = Sammel-Download")
+		elif self.source_name == "Meine Favoriten":
+			self._set_hint_menu("")
+			if self._fav_sort_mode:
+				self["hint_red"].setText(_b("Fertig"))
+			else:
+				self["hint_red"].setText(_b("Sortieren"))
+		else:
+			self._set_hint_menu("")
+			self["hint_red"].setText("ABC-Auswahl")
+
+	def next_page(self):
+		if self._fetching:
+			return
+		if self.mode == MODE_EPISODES:
+			if not self.ep_has_more:
+				return
+			self.ep_page += 1
+			self._start_episode_page_fetch()
+			return
+		if not self._has_more or self._sv_mode or self._sn_mode:
+			return
+		self.page += 1
+		self._start_fetch()
+
+	def prev_page(self):
+		if self._fetching:
+			return
+		if self.mode == MODE_EPISODES:
+			if self.ep_page == 0:
+				return
+			self.ep_page -= 1
+			self._ep_next_api_offset = self.ep_page * PAGE_SIZE
+			self._start_episode_page_fetch()
+			return
+		if self.page == 0 or self._sv_mode or self._sn_mode:
+			return
+		self.page -= 1
+		self._groups_next_api_offset = self.page * (PAGE_SIZE * 5)
+		self._paged_total = 0
+		self._paged_has_more = False
+		self.all_items = []
+		self._start_fetch()
+
+	def _start_episode_page_fetch(self):
+		if self._fetching:
+			return
+		real_idx = self.cur_group_idx - self._sv_sn_offset()
+		if real_idx < 0 or real_idx >= len(self.groups_filtered):
+			return
+		gname, gitems = self.groups_filtered[real_idx]
+		self._fetching = True
+		self._fetch_target = "episodes"
+		self._fetch_episodes_result = []
+		self["status_label"].setText("Lade Seite %d ..." % (self.ep_page + 1))
+		self._set_list([])
+		self._update_page_hint()
+		t = Thread(target=self._fetch_episodes_thread, args=(gname, gitems))
+		t.daemon = True
+		t.start()
+		if self._poll_timer:
+			self._poll_timer.start(300, True)
+
+	# In der Episodenansicht nur "timestamp" (kein "az" — wuerde nur aktuelle Seite sortieren)
+	_SORT_CYCLE_GROUPS = ["timestamp", "az", "za"]
+	_SORT_CYCLE_EPISODES = ["timestamp"]
+	_SORT_LABELS = {
+		"timestamp": "Neueste zuerst",
+		"az": "A-Z",
+		"za": "Z-A",
+	}
+
+	def _update_sort_label(self):
+		if self.mode == MODE_GROUPS:
+			self["sort_label"].setText(_b(self._current_sort_label()))
+
+	def _current_sort_label(self):
+		return OeMediathekScreen._SORT_LABELS.get(self.sort_mode, "Neueste zuerst")
+
+	def _next_sort_hint(self):
+		cycle = self._SORT_CYCLE_GROUPS if self.mode == MODE_GROUPS else self._SORT_CYCLE_EPISODES
+		if len(cycle) <= 1:
+			return ""
+		idx = cycle.index(self.sort_mode) if self.sort_mode in cycle else 0
+		next_mode = cycle[(idx + 1) % len(cycle)]
+		return OeMediathekScreen._SORT_LABELS.get(next_mode, "Neueste zuerst")
+
+	def cycle_sort(self):
+		try:
+			# Im Episode-Favoriten-Sortiermodus: Gruen = Rückgängig
+			if self._ep_fav_sort_mode:
+				if self._ep_fav_order_backup is not None:
+					self.cur_episodes = list(self._ep_fav_order_backup)
+					self._ep_fav_grabbed = None
+					self._list_items = self._ep_fav_list_entries()
+					self._render_list()
+					self._ep_fav_update_hints()
+					self._show_toast(_b("Reihenfolge zurückgesetzt"), added=True)
+				return
+			if self._fav_sort_mode:
+				if self._fav_order_backup is not None:
+					backed = dict((gname, gitems) for gname, gitems in self.groups_filtered)
+					self.groups_filtered = [(g, backed.get(g, [])) for g in self._fav_order_backup if g in backed]
+					self._fav_grabbed = None
+					self._list_items = self._fav_list_entries()
+					self._render_list()
+					self._fav_update_hints()
+					self._show_toast(_b("Reihenfolge zurückgesetzt"), added=True)
+				return
+
+			cycle = self._SORT_CYCLE_GROUPS if self.mode == MODE_GROUPS else self._SORT_CYCLE_EPISODES
+			if len(cycle) <= 1:
+				return
+			idx = cycle.index(self.sort_mode) if self.sort_mode in cycle else 0
+			self.sort_mode = cycle[(idx + 1) % len(cycle)]
+			_log("Sortierung: " + self.sort_mode)
+
+			if self.mode == MODE_GROUPS:
+				if self._sv_mode or self._sn_mode:
+					return
+				elif self.sort_mode in ("az", "za"):
+					if self.alpha_letter:
+						self.groups = _build_groups(self._fetch_alpha_result, self.sort_mode)
+						self.groups_filtered = list(self.groups)
+						self._show_groups()
+					else:
+						self.page = 0
+						self.groups = []
+						self.groups_filtered = []
+						self._set_list([])
+						self["description_text"].setText(_b(""))
+						self._start_fetch()
+				else:
+					if self.alpha_letter:
+						self.groups = _build_groups(self._fetch_alpha_result, self.sort_mode)
+						self.groups_filtered = list(self.groups)
+						self._show_groups()
+					else:
+						self.page = 0
+						self._groups_next_api_offset = 0
+						self._paged_total = 0
+						self._paged_has_more = False
+						self.all_items = []
+						self.groups = []
+						self.groups_filtered = []
+						self._set_list([])
+						self["description_text"].setText(_b(""))
+						self._start_fetch()
+			else:
+				self.ep_page = 0
+				self._set_list([])
+				self["description_text"].setText(_b(""))
+				self._start_episode_fetch(self.cur_group_idx - self._sv_sn_offset())
+		except Exception:
+			_log("cycle_sort: " + _fmt_exc())
+
+	def on_green(self):
+		if self._ep_fav_sort_mode or self._fav_sort_mode:
+			self.cycle_sort()
+		elif self.source_name == "Meine Favoriten" and self.mode == MODE_GROUPS:
+			# Lokale Favoriten-Gruppen nicht per API nachladen; Sortieren ueber Rot.
+			pass
+		elif self.source_name == "Meine Favoriten" and self._fav_show_episodes:
+			# Die flachen Einzelfolgen-Favoriten werden manuell sortiert.
+			self._ep_fav_toggle_sort_mode()
+		elif self.mode == MODE_EPISODES and self.force_uhd and self.zdf_uhd_static:
+			# Statische ZDF-UHD-Liste kennt keine Sortierung (get_zdf_uhd_static_episodes
+			# hat keinen sort_by-Parameter) - Gruen bleibt hier ohne Wirkung.
+			pass
+		elif self.mode == MODE_EPISODES:
+			self.cycle_ep_sort()
+		else:
+			self.cycle_sort()
+
+	def on_info(self):
+		if self.mode == MODE_EPISODES:
+			self.on_toggle_watched()
+
+	def on_toggle_watched(self):
+		try:
+			idx = self._get_list_index()
+			if idx is None or idx >= len(self.cur_episodes):
+				return
+			item = self.cur_episodes[idx]
+			url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
+			if not url:
+				return
+			toggle_watched(url)
+			is_direct_hits = _u(self.cur_group_name).startswith(">> Direkte Treffer")
+			show_group = is_direct_hits or self.source_name == "Meine Favoriten"
+			self._list_items = [_episode_label(i["title"], i.get("group") if show_group else None, watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes]
+			self._list_focus(idx)
+			self._update_info_hint()
+		except Exception:
+			_log("on_toggle_watched: " + _fmt_exc())
+
+	def toggle_episode_favorite(self):
+		try:
+			idx = self._get_list_index()
+			if idx is None or idx >= len(self.cur_episodes):
+				return
+			item = self.cur_episodes[idx]
+			url = item.get("stream_url_hd") or item.get("stream_url_sd") or ""
+			if not url:
+				return
+			if is_episode_favorite(url):
+				remove_episode_favorite(url)
+				self._show_toast(_b("Favorit entfernt"), added=False)
+				if self.source_name == "Meine Favoriten" and self._fav_show_episodes:
+					self.cur_episodes = [i for i in self.cur_episodes if (i.get("stream_url_hd") or i.get("stream_url_sd") or "") != url]
+					self._list_items = [_episode_label(i["title"], i.get("group"), watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes]
+					self["status_label"].setText(_b("%d Einzelfolgen" % len(self.cur_episodes)))
+					new_idx = min(idx, len(self.cur_episodes) - 1)
+					if new_idx >= 0:
+						self._list_focus(new_idx)
+					else:
+						self._render_list()
+			else:
+				add_episode_favorite(item)
+				self._show_toast(_b("Favorit hinzugefügt!"), added=True)
+			self._update_blue_hint()
+			self._render_list()
+		except Exception:
+			_log("toggle_episode_favorite: " + _fmt_exc())
+
+	def on_blue(self):
+		if self.mode == MODE_EPISODES:
+			self.toggle_episode_favorite()
+		else:
+			self.toggle_favorite()
+
+	def on_yellow(self):
+		if self.source_name == "Meine Favoriten" and not self._fav_sort_mode:
+			self._fav_toggle_episode_view()
+		else:
+			self.open_search()
+
+	def _fav_toggle_episode_view(self):
+		if self._fav_sort_mode or self._ep_fav_sort_mode:
+			return
+		self._fav_show_episodes = not self._fav_show_episodes
+		self._fav_update_hints()
+		if self._fav_show_episodes:
+			self._fav_allow_auto_switch = True
+			self._show_episode_favorites()
+		else:
+			self._fav_allow_auto_switch = False
+			self._reload_favorites()
+
+	def _show_episode_favorites(self):
+		items = get_episode_favorites()
+		self["status_label"].setText(_b("%d Einzelfolgen" % len(items)))
+		# cur_episodes/mode MUESSEN vor _set_list() gesetzt werden: _set_list()
+		# rendert die Liste synchron ueber _render_list(), das den Favoriten-
+		# Stern nur zeichnet wenn self.mode bereits MODE_EPISODES ist. War das
+		# noch der alte Wert (Wechsel aus der Gruppen-Favoriten-Ansicht),
+		# fehlte der Stern beim ersten Anzeigen komplett.
+		self.cur_episodes = items
+		self.mode = MODE_EPISODES
+		self._set_list([_episode_label(i["title"], i.get("group"), watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in items])
+		self.last_index = -1
+		self._ep_fav_sort_mode = False
+		self._ep_fav_grabbed = None
+		self._ep_fav_order_backup = None
+		self._ep_fav_update_hints()
+		self._update_info_hint()
+
+	def _ep_fav_update_hints(self):
+		if self._ep_fav_sort_mode:
+			self["hint_red"].setText(_b("Fertig"))
+			self._set_hint_menu("")
+			self["hint_green"].setText(_b("Rückgängig"))
+			self["hint_yellow"].setText(_b(""))
+			self["hint_blue"].setText(_b("Favorit löschen"))
+			if self._ep_fav_grabbed is None:
+				self["hint_page"].setText(_b("OK = Greifen"))
+			else:
+				self["hint_page"].setText(_b("OK = Ablegen"))
+		else:
+			self._update_red_hint()
+			self["hint_green"].setText(_b("Sortieren"))
+			self["hint_yellow"].setText(_b("Folgen > Gruppen"))
+			self["hint_blue"].setText(_b("Favorit löschen"))
+			self["hint_info"].setText(_b("INFO / EPG\nMarkieren"))
+			self["hint_page"].setText(_b(""))
+
+	def _ep_fav_toggle_sort_mode(self):
+		if not self._ep_fav_sort_mode:
+			self._ep_fav_sort_mode = True
+			self._ep_fav_grabbed = None
+			self._ep_fav_order_backup = list(self.cur_episodes)
+			self._ep_fav_update_hints()
+			self._list_items = self._ep_fav_list_entries()
+			self._render_list()
+		else:
+			self._ep_fav_sort_mode = False
+			self._ep_fav_grabbed = None
+			self._ep_fav_order_backup = None
+			from .mediathek import _save_episode_favorites, _item_to_text
+			_save_episode_favorites([_item_to_text(i) for i in self.cur_episodes])
+			self._show_toast(_b("Reihenfolge gespeichert"), added=True)
+			self._list_items = self._ep_fav_list_entries()
+			self._render_list()
+			self._ep_fav_update_hints()
+
+	def _ep_fav_list_entries(self):
+		entries = []
+		for i, item in enumerate(self.cur_episodes):
+			label = _episode_label(item["title"], item.get("group"), watched=is_watched(item.get("stream_url_hd") or item.get("stream_url_sd") or ""), season=item.get("season"), episode=item.get("episode"))
+			if i == self._ep_fav_grabbed:
+				label = _b("» ") + label
+			entries.append(label)
+		return entries
+
+	def _ep_fav_move(self, direction):
+		if not self._ep_fav_sort_mode or self._ep_fav_grabbed is None:
+			return
+		idx = self._ep_fav_grabbed
+		new_idx = idx + direction
+		if new_idx < 0 or new_idx >= len(self.cur_episodes):
+			return
+		self.cur_episodes[idx], self.cur_episodes[new_idx] = \
+			self.cur_episodes[new_idx], self.cur_episodes[idx]
+		self._ep_fav_grabbed = new_idx
+		self._list_items = self._ep_fav_list_entries()
+		self._list_focus(new_idx)
+
+	def _reload_favorites(self):
+		self.mode = MODE_GROUPS
+		self.page = 0
+		self._paged_total = 0
+		self._paged_has_more = False
+		self.all_items = []
+		self.groups = []
+		self.groups_filtered = []
+		self._set_list([])
+		self["description_text"].setText(_b(""))
+		self._start_fetch()
+
+	def open_search(self):
+		if self.source_name == "Meine Favoriten":
+			return
+		try:
+			self.session.openWithCallback(
+				self._on_history_choice,
+				OeMediathekSearchHistoryScreen,
+			)
+		except Exception:
+			_log("open_search: " + _fmt_exc())
+
+	def _on_history_choice(self, choice):
+		if choice is None:
+			return
+		if choice == "__new__":
+			try:
+				self.session.openWithCallback(
+					self.do_search, VirtualKeyBoard,
+					title="Suchen:", text="",
+				)
+			except Exception:
+				_log("open_search VirtualKeyBoard: " + _fmt_exc())
+		else:
+			self.do_search(choice)
+
+	def do_search(self, term):
+		try:
+			if term is not None:
+				term = _u(term).strip()
+				if not term:
+					self.current_search = None
+				else:
+					self.current_search = term
+					save_search_history(term)
+
+				self.mode = MODE_GROUPS
+				self.page = 0
+				self._paged_total = 0
+				self._paged_has_more = False
+				self._groups_next_api_offset = 0
+				self.all_items = []
+				self.groups = []
+				self.groups_filtered = []
+				self._set_list([])
+				self["description_text"].setText(_b(""))
+				self._start_fetch()
+		except Exception:
+			_log("do_search: " + _fmt_exc())
 
 
 # --------------------------------------------------------------------------
 # Dateibrowser für Ordnerauswahl
 # --------------------------------------------------------------------------
 
-class OeMediathekDirBrowser(_CustomListMixin, Screen):
+class OeMediathekDirBrowser(LcdIconSummaryMixin, _CustomListMixin, Screen):
 
     _CL_ROWS = _DB_LIST_ROWS
 
@@ -5853,11 +5819,11 @@ class OeMediathekDirBrowser(_CustomListMixin, Screen):
         # "Hier speichern" direkt oben — nicht erst nach Scrollen durch Dateien
         entries.append(("»  Hier speichern", path))
         try:
-            names = sorted(os.listdir(path))
+            names = sorted(listdir(path))
             for name in names:
                 name = _u(name)
-                full = os.path.join(path, name)
-                if os.path.isdir(full):
+                full = join(path, name)
+                if isdir(full):
                     label = "[" + name + "]"
                     entries.append((label, full))
         except Exception:
@@ -5887,7 +5853,7 @@ class OeMediathekDirBrowser(_CustomListMixin, Screen):
         if full is None:
             # ".." — eine Ebene hoch
             cur = _u(self._cur)
-            parent = os.path.dirname(cur.rstrip("/")) or "/"
+            parent = dirname(cur.rstrip("/")) or "/"
             self._fill(parent)
         elif full == self._cur:
             # "Hier speichern"
@@ -5911,8 +5877,8 @@ class OeMediathekDirBrowser(_CustomListMixin, Screen):
         if not name:
             return
         try:
-            new_path = os.path.join(self._cur, self._normalize_path(name))
-            os.makedirs(new_path)
+            new_path = join(self._cur, self._normalize_path(name))
+            makedirs(new_path)
             self._fill(self._cur)
         except Exception as e:
             _log("DirBrowser _create_folder: " + str(e))
@@ -5935,7 +5901,7 @@ class OeMediathekDirBrowser(_CustomListMixin, Screen):
 # ZDF UHD – Sendungsauswahl-Screen
 # --------------------------------------------------------------------------
 
-class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
+class OeMediathekZdfUhdScreen(LcdIconSummaryMixin, _CustomListMixin, Screen):
 
     _CL_ROWS = _LIST_ROWS
 
@@ -6058,7 +6024,7 @@ class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
             -1,
         )
 
-        t = threading.Thread(target=self._fetch)
+        t = Thread(target=self._fetch)
         t.daemon = True
         t.start()
 
@@ -6203,7 +6169,7 @@ class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
         self["actions"].setEnabled(False)
         self["hint_red"].setText(_b("Aktualisiere..."))
         self["status_label"].setText(_b("Aktualisiere UHD-Liste..."))
-        t = threading.Thread(target=self._do_refresh)
+        t = Thread(target=self._do_refresh)
         t.daemon = True
         t.start()
 
@@ -6221,7 +6187,7 @@ class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
                 self["status_label"].setText(_b("Fehler: " + str(err)[:40]))
             else:
                 self["status_label"].setText(_b("%d Einträge aktualisiert" % count))
-                t = threading.Thread(target=self._fetch)
+                t = Thread(target=self._fetch)
                 t.daemon = True
                 t.start()
         except Exception:
@@ -6261,291 +6227,282 @@ class OeMediathekZdfUhdScreen(_CustomListMixin, Screen):
 # Settings-Screen
 # --------------------------------------------------------------------------
 
-class OeMediathekSettingsScreen(Screen):
+class OeMediathekSettingsScreen(LcdIconSummaryMixin, Screen):
 
-    # Einträge: (label_text, action_id, status_fn_or_None, description_text)
-    # action_id: 0=Browse, 1=ToggleConvert, 2=ResetOrder, 3=ToggleWrapLR
-    _ENTRIES = [
-        ("Download-Ordner", 0, None,
-         "Speicherort für heruntergeladene Sendungen auf der Box auswählen."),
-        ("Unterordner pro Sendung:", 11, get_download_subfolder,
-         "Einzel-Downloads in einem Unterordner mit dem Sendungsnamen speichern (Sammel-Downloads immer)."),
-        ("MP4 -> TS Konvertierung:", 1, get_auto_convert,
-         "Heruntergeladene MP4-Dateien nach dem Download automatisch in TS umwandeln."),
-        ("Download-Qualität:", 6, get_download_quality_label,
-         "Feste Auflösung für Downloads, mit Fallback falls nicht verfügbar."),
-        ("Zusatzinfos bei Downloads:", 9, get_download_extra_info_label,
-         ".meta füllt die Enigma2-Filmliste, .txt lesen auch andere Mediaplayer."),
-        ("Abspielqualität:", 7, get_stream_quality_label,
-         "Auflösung beim Starten eines Videos, oder ob vorher jedes Mal gefragt wird."),
-        ("Seite wechseln mit Links/Rechts:", 3, get_tile_wrap_lr,
-         "Mit Links/Rechts im Hauptmenü zwischen den Seiten blättern."),
-        ("Live TV im Hintergrund:", 10, get_live_tv_background,
-         "Bei AUS wird der laufende Sender beim Öffnen angehalten und beim Verlassen wiederhergestellt."),
-        ("ServiceApp für Live-Streams konfigurieren:", 4, get_serviceapp_autoconfigure,
-         "ServiceApp automatisch für synchrone Live-Stream-Wiedergabe einrichten."),
-        ("Debug-Logging:", 5, get_debug_logging,
-         "Ausführliches Log unter /tmp/OeMediathek/oemediathek.log für die Fehlersuche schreiben."),
-        ("exteplayer3 für VOD-Streams:", 8, get_force_exteplayer,
-         "Mediathek-Episoden über exteplayer3 statt den internen Player abspielen."),
-        ("Reihenfolge zurücksetzen", 2, None,
-         "Sortierreihenfolge der Kacheln im Hauptmenü auf Standard zurücksetzen."),
-    ]
+	# Einträge: (label_text, action_id, status_fn_or_None, description_text)
+	# action_id: 0=Browse, 1=ToggleConvert, 2=ResetOrder, 3=ToggleWrapLR
+	_ENTRIES = [
+		("Download-Ordner", 0, None, "Speicherort für heruntergeladene Sendungen auf der Box auswählen."),
+		("Unterordner pro Sendung:", 11, get_download_subfolder, "Einzel-Downloads in einem Unterordner mit dem Sendungsnamen speichern (Sammel-Downloads immer)."),
+		("MP4 -> TS Konvertierung:", 1, get_auto_convert, "Heruntergeladene MP4-Dateien nach dem Download automatisch in TS umwandeln."),
+		("Download-Qualität:", 6, get_download_quality_label, "Feste Auflösung für Downloads, mit Fallback falls nicht verfügbar."),
+		("Zusatzinfos bei Downloads:", 9, get_download_extra_info_label, ".meta füllt die Enigma2-Filmliste, .txt lesen auch andere Mediaplayer."),
+		("Abspielqualität:", 7, get_stream_quality_label, "Auflösung beim Starten eines Videos, oder ob vorher jedes Mal gefragt wird."),
+		("Seite wechseln mit Links/Rechts:", 3, get_tile_wrap_lr, "Mit Links/Rechts im Hauptmenü zwischen den Seiten blättern."),
+		("Live TV im Hintergrund:", 10, get_live_tv_background, "Bei AUS wird der laufende Sender beim Öffnen angehalten und beim Verlassen wiederhergestellt."),
+		("ServiceApp für Live-Streams konfigurieren:", 4, get_serviceapp_autoconfigure, "ServiceApp automatisch für synchrone Live-Stream-Wiedergabe einrichten."),
+		("Debug-Logging:", 5, get_debug_logging, "Ausführliches Log unter /tmp/OeMediathek/oemediathek.log für die Fehlersuche schreiben."),
+		("exteplayer3 für VOD-Streams:", 8, get_force_exteplayer, "Mediathek-Episoden über exteplayer3 statt den internen Player abspielen."),
+		("Icon auf Frontdisplay:", 12, displayHelper.getModeLabel, "Aus, Immer (auch bei Wiedergabe) oder Nur im Plugin-Menü (nicht bei Wiedergabe)."),
+		("Reihenfolge zurücksetzen", 2, None, "Sortierreihenfolge der Kacheln im Hauptmenü auf Standard zurücksetzen."),
+	]
 
-    # Layout-Konstanten je Auflösung: (x, y_first_row, row_h, font_title, font_row, font_hint, w, h, status_w)
-    if IS_FHD:
-        _L = (40, 115, 56, 42, 34, 28, 800, 516, 120)
-    else:
-        _L = (27, 76, 37, 28, 22, 19, 534, 344, 80)
+	# Layout-Konstanten je Auflösung: (x, y_first_row, row_h, font_title, font_row, font_hint, w, h, status_w)
+	if IS_FHD:
+		_L = (40, 115, 56, 42, 34, 28, 800, 516, 120)
+	else:
+		_L = (27, 76, 37, 28, 22, 19, 534, 344, 80)
 
-    @classmethod
-    def _make_skin(cls):
-        x, y0, rh, ft, fr, fh, w, h, sw = cls._L
-        iw = w - 2 * x        # inner width
-        lw = iw - sw - 10     # label width on the left
-        n = len(cls._ENTRIES)
-        list_h = n * rh
-        desc_h = 2 * (fh + 6)  # zweizeilig, fuer laengere Beschreibungen
-        y_line1 = y0 - 5
-        y_line2 = y0 + list_h + 5
-        y_desc = y_line2 + 10
-        y_hint = y_desc + desc_h + 8
-        total_h = y_hint + fh + 15
+	@classmethod
+	def _make_skin(cls):
+		x, y0, rh, ft, fr, fh, w, h, sw = cls._L
+		iw = w - 2 * x        # inner width
+		lw = iw - sw - 10     # label width on the left
+		n = len(cls._ENTRIES)
+		list_h = n * rh
+		desc_h = 2 * (fh + 6)  # zweizeilig, fuer laengere Beschreibungen
+		y_line1 = y0 - 5
+		y_line2 = y0 + list_h + 5
+		y_desc = y_line2 + 10
+		y_hint = y_desc + desc_h + 8
+		total_h = y_hint + fh + 15
 
-        rows = ""
-        for i in range(n):
-            ry = y0 + i * rh
-            rows += """
-            <widget name="sel_{i}"   position="{x},{ry}"  size="{iw},{rh}" backgroundColor="#00253850" zPosition="1" transparent="0" />
-            <widget name="lbl_{i}"   position="{x},{ry}"  size="{lw},{rh}" font="Regular;{fr}" valign="center" foregroundColor="#FFFFFF" backgroundColor="#33000000" transparent="1" zPosition="2" noWrap="1" />
-            <widget name="stat_{i}"  position="{sx},{ry}" size="{sw},{rh}" font="Regular;{fr}" valign="center" halign="right" foregroundColor="#FFDD00" backgroundColor="#33000000" transparent="1" zPosition="2" />
-            """.format(i=i, x=x, ry=ry, iw=iw, rh=rh, lw=lw, sx=x + lw + 10, sw=sw, fr=fr)
+		rows = ""
+		for i in range(n):
+			ry = y0 + i * rh
+			rows += """
+			<widget name="sel_{i}"   position="{x},{ry}"  size="{iw},{rh}" backgroundColor="#00253850" zPosition="1" transparent="0" />
+			<widget name="lbl_{i}"   position="{x},{ry}"  size="{lw},{rh}" font="Regular;{fr}" valign="center" foregroundColor="#FFFFFF" backgroundColor="#33000000" transparent="1" zPosition="2" noWrap="1" />
+			<widget name="stat_{i}"  position="{sx},{ry}" size="{sw},{rh}" font="Regular;{fr}" valign="center" halign="right" foregroundColor="#FFDD00" backgroundColor="#33000000" transparent="1" zPosition="2" />
+			""".format(i=i, x=x, ry=ry, iw=iw, rh=rh, lw=lw, sx=x + lw + 10, sw=sw, fr=fr)
 
-        return """
-        <screen name="OeMediathekSettingsScreen" position="{px},{py}" size="{w},{total_h}" flags="wfNoBorder">
-            <eLabel position="0,0" size="{w},{total_h}" backgroundColor="#33000000" zPosition="-6" />
-            <widget name="title_label" position="{x},10" size="{iw},{ft_h}" font="Regular;{ft}" halign="center" foregroundColor="#FFFFFF" transparent="1" />
-            <eLabel position="{x},{y_line1}" size="{iw},2" backgroundColor="#44FFFFFF" zPosition="-4" />
-            {rows}
-            <eLabel position="{x},{y_line2}" size="{iw},2" backgroundColor="#44FFFFFF" zPosition="-4" />
-            <widget name="desc_label" position="{x},{y_desc}" size="{iw},{desc_h}" font="Regular;{fh_size}" halign="center" valign="top" foregroundColor="#BBBBBB" backgroundColor="#1A000000" transparent="1" />
-            <widget name="hint_label" position="{x},{y_hint}" size="{iw},{fh}" font="Regular;{fh_size}" halign="center" valign="center" foregroundColor="#AAAAAA" backgroundColor="#1A000000" transparent="1" />
-        </screen>""".format(
-            px=(1920 - w) // 2 if IS_FHD else (1280 - w) // 2,
-            py=(1080 - total_h) // 2 if IS_FHD else (720 - total_h) // 2,
-            w=w, total_h=total_h, x=x, iw=iw,
-            ft=ft, ft_h=ft + 10,
-            y_line1=y_line1, y_line2=y_line2, y_desc=y_desc, desc_h=desc_h,
-            rows=rows,
-            y_hint=y_hint, fh=fh + 4, fh_size=fh,
-        )
+		return """
+		<screen name="OeMediathekSettingsScreen" position="{px},{py}" size="{w},{total_h}" flags="wfNoBorder">
+			<eLabel position="0,0" size="{w},{total_h}" backgroundColor="#33000000" zPosition="-6" />
+			<widget name="title_label" position="{x},10" size="{iw},{ft_h}" font="Regular;{ft}" halign="center" foregroundColor="#FFFFFF" transparent="1" />
+			<eLabel position="{x},{y_line1}" size="{iw},2" backgroundColor="#44FFFFFF" zPosition="-4" />
+			{rows}
+			<eLabel position="{x},{y_line2}" size="{iw},2" backgroundColor="#44FFFFFF" zPosition="-4" />
+			<widget name="desc_label" position="{x},{y_desc}" size="{iw},{desc_h}" font="Regular;{fh_size}" halign="center" valign="top" foregroundColor="#BBBBBB" backgroundColor="#1A000000" transparent="1" />
+			<widget name="hint_label" position="{x},{y_hint}" size="{iw},{fh}" font="Regular;{fh_size}" halign="center" valign="center" foregroundColor="#AAAAAA" backgroundColor="#1A000000" transparent="1" />
+		</screen>""".format(
+			px=(1920 - w) // 2 if IS_FHD else (1280 - w) // 2,
+			py=(1080 - total_h) // 2 if IS_FHD else (720 - total_h) // 2,
+			w=w, total_h=total_h, x=x, iw=iw,
+			ft=ft, ft_h=ft + 10,
+			y_line1=y_line1, y_line2=y_line2, y_desc=y_desc, desc_h=desc_h,
+			rows=rows,
+			y_hint=y_hint, fh=fh + 4, fh_size=fh,
+		)
 
-    def __init__(self, session):
-        self.skin = self._make_skin()
-        Screen.__init__(self, session)
-        self._sel = 0
+	def __init__(self, session):
+		self.skin = self._make_skin()
+		Screen.__init__(self, session)
+		self._sel = 0
 
-        self["title_label"] = Label(_b("Einstellungen"))
-        self["desc_label"] = Label(_b(""))
-        self["hint_label"] = Label(_b("OK = Auswählen   |   EXIT = Schließen"))
+		self["title_label"] = Label(_b("Einstellungen"))
+		self["desc_label"] = Label(_b(""))
+		self["hint_label"] = Label(_b("OK = Auswählen   |   EXIT = Schließen"))
 
-        for i, (label, _, _fn, _desc) in enumerate(self._ENTRIES):
-            self["lbl_%d" % i] = Label(_b(label))
-            self["stat_%d" % i] = Label(_b(""))
-            self["sel_%d" % i] = Label(_b(""))
-            self["sel_%d" % i].hide()
+		for i, (label, _, _fn, _desc) in enumerate(self._ENTRIES):
+			self["lbl_%d" % i] = Label(_b(label))
+			self["stat_%d" % i] = Label(_b(""))
+			self["sel_%d" % i] = Label(_b(""))
+			self["sel_%d" % i].hide()
 
-        self["actions"] = ActionMap(
-            ["OkCancelActions", "DirectionActions"],
-            {
-                "ok": self._on_ok,
-                "cancel": self.close,
-                "up": self._move_up,
-                "upRepeated": self._move_up,
-                "down": self._move_down,
-                "downRepeated": self._move_down,
-            },
-            -1,
-        )
-        self.onShow.append(self._refresh)
+		self["actions"] = ActionMap(
+			["OkCancelActions", "DirectionActions"],
+			{
+				"ok": self._on_ok,
+				"cancel": self.close,
+				"up": self._move_up,
+				"upRepeated": self._move_up,
+				"down": self._move_down,
+				"downRepeated": self._move_down,
+			},
+			-1,
+		)
+		self.onShow.append(self._refresh)
 
-    def _refresh(self):
-        for i, (_label, _aid, fn, _desc) in enumerate(self._ENTRIES):
-            if fn is not None:
-                val = fn()
-                if isinstance(val, str):
-                    self["stat_%d" % i].setText(_b(val))
-                else:
-                    self["stat_%d" % i].setText(_b("[EIN]" if val else "[AUS]"))
-            else:
-                self["stat_%d" % i].setText(_b(""))
-        self._update_highlight()
+	def _refresh(self):
+		for i, (_label, _aid, fn, _desc) in enumerate(self._ENTRIES):
+			if fn is not None:
+				val = fn()
+				if isinstance(val, str):
+					self["stat_%d" % i].setText(_b(val))
+				else:
+					self["stat_%d" % i].setText(_b("[EIN]" if val else "[AUS]"))
+			else:
+				self["stat_%d" % i].setText(_b(""))
+		self._update_highlight()
 
-    def _update_highlight(self):
-        self["desc_label"].setText(_b(self._ENTRIES[self._sel][3]))
-        for i in range(len(self._ENTRIES)):
-            try:
-                if i == self._sel:
-                    self["sel_%d" % i].show()
-                else:
-                    self["sel_%d" % i].hide()
-            except Exception:
-                pass
+	def _update_highlight(self):
+		self["desc_label"].setText(_b(self._ENTRIES[self._sel][3]))
+		for i in range(len(self._ENTRIES)):
+			try:
+				if i == self._sel:
+					self["sel_%d" % i].show()
+				else:
+					self["sel_%d" % i].hide()
+			except Exception:
+				pass
 
-    def _move_up(self):
-        self._sel = (self._sel - 1) % len(self._ENTRIES)
-        self._update_highlight()
+	def _move_up(self):
+		self._sel = (self._sel - 1) % len(self._ENTRIES)
+		self._update_highlight()
 
-    def _move_down(self):
-        self._sel = (self._sel + 1) % len(self._ENTRIES)
-        self._update_highlight()
+	def _move_down(self):
+		self._sel = (self._sel + 1) % len(self._ENTRIES)
+		self._update_highlight()
 
-    def _on_ok(self):
-        _, action_id, _, _ = self._ENTRIES[self._sel]
-        if action_id == 0:
-            self._browse()
-        elif action_id == 1:
-            self._toggle_convert()
-        elif action_id == 6:
-            self._select_download_quality()
-        elif action_id == 7:
-            self._select_stream_quality()
-        elif action_id == 9:
-            self._select_download_extra_info()
-        elif action_id == 3:
-            self._toggle_tile_wrap_lr()
-        elif action_id == 4:
-            self._toggle_serviceapp_autoconfigure()
-        elif action_id == 5:
-            self._toggle_debug_logging()
-        elif action_id == 8:
-            self._toggle_force_exteplayer()
-        elif action_id == 10:
-            self._toggle_live_tv_background()
-        elif action_id == 11:
-            self._toggle_download_subfolder()
-        elif action_id == 2:
-            self._reset_order()
+	def _on_ok(self):
+		_, action_id, _, _ = self._ENTRIES[self._sel]
+		if action_id == 0:
+			self._browse()
+		elif action_id == 1:
+			self._toggle_convert()
+		elif action_id == 6:
+			self._select_download_quality()
+		elif action_id == 7:
+			self._select_stream_quality()
+		elif action_id == 9:
+			self._select_download_extra_info()
+		elif action_id == 3:
+			self._toggle_tile_wrap_lr()
+		elif action_id == 4:
+			self._toggle_serviceapp_autoconfigure()
+		elif action_id == 5:
+			self._toggle_debug_logging()
+		elif action_id == 8:
+			self._toggle_force_exteplayer()
+		elif action_id == 10:
+			self._toggle_live_tv_background()
+		elif action_id == 11:
+			self._toggle_download_subfolder()
+		elif action_id == 12:
+			displayHelper.showSettings(self, OeMediathekPickerScreen)
+		elif action_id == 2:
+			self._reset_order()
 
-    def _browse(self):
-        try:
-            cur = get_save_dir()
-            start = _u(cur)
-            while start and start != "/" and not os.path.isdir(start):
-                start = os.path.dirname(start)
-            if not start or not os.path.isdir(start):
-                start = "/media"
-            self._browser = self.session.open(OeMediathekDirBrowser, start)
-            self._browser.onClose.append(self._dir_browser_closed)
-        except Exception:
-            _log("Settings _browse: " + _fmt_exc())
+	def _browse(self):
+		try:
+			cur = get_save_dir()
+			start = _u(cur)
+			while start and start != "/" and not isdir(start):
+				start = dirname(start)
+			if not start or not isdir(start):
+				start = "/media"
+			self._browser = self.session.open(OeMediathekDirBrowser, start)
+			self._browser.onClose.append(self._dir_browser_closed)
+		except Exception:
+			_log("Settings _browse: " + _fmt_exc())
 
-    def _dir_browser_closed(self):
-        try:
-            result = self._browser._result
-            if result:
-                result = _u(result)
-                set_save_dir(result)
-        except Exception:
-            _log("Settings _dir_browser_closed: " + _fmt_exc())
+	def _dir_browser_closed(self):
+		try:
+			result = self._browser._result
+			if result:
+				result = _u(result)
+				set_save_dir(result)
+		except Exception:
+			_log("Settings _dir_browser_closed: " + _fmt_exc())
 
-    def _toggle_convert(self):
-        set_auto_convert(not get_auto_convert())
-        self._refresh()
+	def _toggle_convert(self):
+		set_auto_convert(not get_auto_convert())
+		self._refresh()
 
-    def _select_download_quality(self):
-        choices = [
-            (_b("Höchste Qualität (1080p)"), "hd"),
-            (_b("720p"), "720p"),
-        ]
-        self.session.openWithCallback(
-            self._download_quality_chosen,
-            OeMediathekPickerScreen,
-            title="Download-Qualität:",
-            choices=choices,
-        )
+	def _select_download_quality(self):
+		choices = [
+			(_b("Höchste Qualität (1080p)"), "hd"),
+			(_b("720p"), "720p"),
+		]
+		self.session.openWithCallback(
+			self._download_quality_chosen,
+			OeMediathekPickerScreen,
+			title="Download-Qualität:",
+			choices=choices,
+		)
 
-    def _download_quality_chosen(self, value):
-        if value is not None:
-            set_download_quality(value)
-            self._refresh()
+	def _download_quality_chosen(self, value):
+		if value is not None:
+			set_download_quality(value)
+			self._refresh()
 
-    def _select_stream_quality(self):
-        choices = [
-            (_b("Immer fragen"), "ask"),
-            (_b("Höchste Qualität (1080p)"), "hd"),
-            (_b("720p"), "720p"),
-        ]
-        self.session.openWithCallback(
-            self._stream_quality_chosen,
-            OeMediathekPickerScreen,
-            title="Abspielqualität:",
-            choices=choices,
-        )
+	def _select_stream_quality(self):
+		choices = [
+			(_b("Immer fragen"), "ask"),
+			(_b("Höchste Qualität (1080p)"), "hd"),
+			(_b("720p"), "720p"),
+		]
+		self.session.openWithCallback(
+			self._stream_quality_chosen,
+			OeMediathekPickerScreen,
+			title="Abspielqualität:",
+			choices=choices,
+		)
 
-    def _stream_quality_chosen(self, value):
-        if value is not None:
-            set_stream_quality(value)
-            self._refresh()
+	def _stream_quality_chosen(self, value):
+		if value is not None:
+			set_stream_quality(value)
+			self._refresh()
 
-    def _select_download_extra_info(self):
-        choices = [
-            (_b(".meta + .txt"), "both"),
-            (_b("nur .meta"), "meta"),
-            (_b("nur .txt"), "txt"),
-        ]
-        self.session.openWithCallback(
-            self._download_extra_info_chosen,
-            OeMediathekPickerScreen,
-            title="Zusatzinfos bei Downloads:",
-            choices=choices,
-        )
+	def _select_download_extra_info(self):
+		choices = [
+			(_b(".meta + .txt"), "both"),
+			(_b("nur .meta"), "meta"),
+			(_b("nur .txt"), "txt"),
+		]
+		self.session.openWithCallback(
+			self._download_extra_info_chosen,
+			OeMediathekPickerScreen,
+			title="Zusatzinfos bei Downloads:",
+			choices=choices,
+		)
 
-    def _download_extra_info_chosen(self, value):
-        if value is not None:
-            set_download_extra_info(value)
-            self._refresh()
+	def _download_extra_info_chosen(self, value):
+		if value is not None:
+			set_download_extra_info(value)
+			self._refresh()
 
-    def _toggle_tile_wrap_lr(self):
-        set_tile_wrap_lr(not get_tile_wrap_lr())
-        self._refresh()
+	def _toggle_tile_wrap_lr(self):
+		set_tile_wrap_lr(not get_tile_wrap_lr())
+		self._refresh()
 
-    def _toggle_serviceapp_autoconfigure(self):
-        set_serviceapp_autoconfigure(not get_serviceapp_autoconfigure())
-        self._refresh()
+	def _toggle_serviceapp_autoconfigure(self):
+		set_serviceapp_autoconfigure(not get_serviceapp_autoconfigure())
+		self._refresh()
 
-    def _toggle_debug_logging(self):
-        set_debug_logging(not get_debug_logging())
-        self._refresh()
+	def _toggle_debug_logging(self):
+		set_debug_logging(not get_debug_logging())
+		self._refresh()
 
-    def _toggle_force_exteplayer(self):
-        set_force_exteplayer(not get_force_exteplayer())
-        self._refresh()
+	def _toggle_force_exteplayer(self):
+		set_force_exteplayer(not get_force_exteplayer())
+		self._refresh()
 
-    def _toggle_live_tv_background(self):
-        set_live_tv_background(not get_live_tv_background())
-        self._refresh()
+	def _toggle_live_tv_background(self):
+		set_live_tv_background(not get_live_tv_background())
+		self._refresh()
 
-    def _toggle_download_subfolder(self):
-        set_download_subfolder(not get_download_subfolder())
-        self._refresh()
+	def _toggle_download_subfolder(self):
+		set_download_subfolder(not get_download_subfolder())
+		self._refresh()
 
-    def _reset_order(self):
-        try:
-            if os.path.exists(OeMediathekMainScreen._ORDER_FILE):
-                os.remove(OeMediathekMainScreen._ORDER_FILE)
-            # SOURCES auf Original-Reihenfolge zurücksetzen
-            SOURCES[:] = _SOURCES_DEFAULT[:]
-            _log("Reihenfolge auf Standard zurückgesetzt")
-        except Exception as e:
-            _log("Settings reset_order: " + str(e))
-        self.close()
+	def _reset_order(self):
+		try:
+			if exists(OeMediathekMainScreen._ORDER_FILE):
+				remove(OeMediathekMainScreen._ORDER_FILE)
+			# SOURCES auf Original-Reihenfolge zurücksetzen
+			SOURCES[:] = _SOURCES_DEFAULT[:]
+			_log("Reihenfolge auf Standard zurückgesetzt")
+		except Exception as e:
+			_log("Settings reset_order: " + str(e))
+		self.close()
 
-    def doClose(self):
-        try:
-            Screen.doClose(self)
-        except TypeError:
-            pass
+	def doClose(self):
+		try:
+			Screen.doClose(self)
+		except TypeError:
+			pass
 
 
 def main(session, **kwargs):
@@ -6559,7 +6516,7 @@ def Plugins(**kwargs):
     return PluginDescriptor(
         name="ÖR Mediathek",
         description="Alle öffentlich-rechtlichen Mediatheken",
-        where=PluginDescriptor.WHERE_PLUGINMENU,
+        where=[PluginDescriptor.WHERE_PLUGINMENU, PluginDescriptor.WHERE_EXTENSIONSMENU],
         icon="plugin.png",
         fnc=main,
     )

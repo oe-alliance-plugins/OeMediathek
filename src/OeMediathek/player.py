@@ -2,29 +2,32 @@
 # player.py
 # Startet einen Stream im angepassten Enigma2-Mediaplayer
 
-import hashlib
-import io
-import os
-import re
-import threading
-import time
+from hashlib import md5
+from io import open as ioOpen
+from json import dumps, load
+from os import makedirs
+from os.path import abspath, dirname, exists, isdir, join
+from re import search, sub
+from subprocess import PIPE, Popen, STDOUT
+from threading import Thread
+from time import localtime, strftime, time
+from urllib.parse import urljoin as _urljoin
+from urllib.request import Request as _Request, urlopen
+
+from enigma import eServiceReference
+
+from .display import LcdPlayerSummaryMixin
+from .downloader import get_debug_logging, get_force_exteplayer, get_live_tv_background, load_settings, save_settings
 
 try:
-    import traceback
+    from traceback import format_exc
 
     def _fmt_exc():
-        return traceback.format_exc()
+        return format_exc()
 except ImportError:
     def _fmt_exc():
         return "(traceback nicht verfügbar)"
 
-from urllib.request import urlopen, Request as _Request
-
-from urllib.parse import urljoin as _urljoin
-
-from enigma import eServiceReference
-
-from .downloader import get_debug_logging, get_force_exteplayer, get_live_tv_background, load_settings, save_settings
 
 _LOG_FILE = "/tmp/OeMediathek/oemediathek.log"
 
@@ -75,13 +78,12 @@ def _short_url(url, max_len=180):
 def _log(msg):
     if not get_debug_logging():
         return
-    import time
-    line = "[OeMediathek %s] PL: %s" % (time.strftime("%H:%M:%S", time.localtime()), str(msg))
+    line = "[OeMediathek %s] PL: %s" % (strftime("%H:%M:%S", localtime()), str(msg))
     print(line)
     try:
-        if not os.path.isdir(_TMP_DIR):
-            os.makedirs(_TMP_DIR)
-        with io.open(_LOG_FILE, "a", encoding="utf-8") as f:
+        if not isdir(_TMP_DIR):
+            makedirs(_TMP_DIR)
+        with ioOpen(_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
         pass
@@ -93,7 +95,7 @@ except ImportError:
     from Screens.InfoBar import MoviePlayer
 
 
-class OeStreamPlayer(MoviePlayer):
+class OeStreamPlayer(LcdPlayerSummaryMixin, MoviePlayer):
     ENABLE_RESUME_SUPPORT = False
 
     def __init__(self, session, service, streams=None, stream_index=0, autoconfigure_serviceapp=True):
@@ -138,7 +140,7 @@ class OeStreamPlayer(MoviePlayer):
 
         self._switching = True
 
-        t = threading.Thread(target=self.__switch_bg, args=(target_idx, url, name, current_token))
+        t = Thread(target=self.__switch_bg, args=(target_idx, url, name, current_token))
         t.daemon = True
         t.start()
 
@@ -205,7 +207,7 @@ _ORF_USER_AGENT = "OeMediathek/1.0"
 
 _TMP_DIR = "/tmp/OeMediathek"
 
-_OFFLINE_VIDEO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "offline_stream.mp4")
+_OFFLINE_VIDEO = join(dirname(abspath(__file__)), "offline_stream.mp4")
 
 
 def _offline_ref(name=""):
@@ -217,7 +219,7 @@ def _offline_ref(name=""):
     return ref
 
 
-_BLACK_BACKGROUND_VIDEO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "black_background.mp4")
+_BLACK_BACKGROUND_VIDEO = join(dirname(abspath(__file__)), "black_background.mp4")
 
 
 def black_background_ref():
@@ -238,25 +240,24 @@ def _tmp_playlist_path(master_url):
     (hls_explorer) zwei verschiedene Sender nicht ueber denselben file://-Pfad
     verwechseln und gecachte Sub-Streams des vorherigen Senders weiterspielen."""
     url_bytes = master_url.encode("utf-8") if isinstance(master_url, str) else master_url
-    h = hashlib.md5(url_bytes).hexdigest()[:12]
+    h = md5(url_bytes).hexdigest()[:12]
     return _TMP_DIR + "/live_" + h + ".m3u8"
 
 
 def _has_serviceapp():
-    return os.path.exists("/usr/lib/enigma2/python/Plugins/SystemPlugins/ServiceApp")
+    return exists("/usr/lib/enigma2/python/Plugins/SystemPlugins/ServiceApp")
 
 
 _NEW_EXTEPLAYER3 = None
 
 
 def _detect_new_exteplayer3():
-    if os.path.isdir("/usr/lib/exteplayer3_deps"):
+    if isdir("/usr/lib/exteplayer3_deps"):
         return True
     # Andere Images haben den Lib-Ordner nicht. Ab v181 meldet exteplayer3
     # beim Aufruf ohne Argumente seine Version und beendet sich danach.
     try:
-        import subprocess
-        proc = subprocess.Popen(["exteplayer3"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = Popen(["exteplayer3"], stdout=PIPE, stderr=STDOUT)
         chunks = []
 
         def _read():
@@ -269,7 +270,7 @@ def _detect_new_exteplayer3():
 
         # Auch ein Kindprozess kann die Pipe offen halten. Nur im Daemon-Thread
         # lesen, damit die Erkennung nach spaetestens zwei Sekunden zurueckkehrt.
-        reader = threading.Thread(target=_read)
+        reader = Thread(target=_read)
         reader.daemon = True
         reader.start()
         reader.join(2.0)
@@ -280,7 +281,7 @@ def _detect_new_exteplayer3():
                 pass
             return False
         out = "".join(chunks)
-        match = re.search(r'"EPLAYER3_EXTENDED"\s*:\s*\{\s*"version"\s*:\s*(\d+)', out)
+        match = search(r'"EPLAYER3_EXTENDED"\s*:\s*\{\s*"version"\s*:\s*(\d+)', out)
         return bool(match and int(match.group(1)) >= 181)
     except Exception:
         return False
@@ -510,11 +511,10 @@ def _restore_serviceapp_settings_from(json_path, settings_subkey):
     Backup). Kein Fehlerfall, wenn die Datei fehlt (Plugin nicht installiert)
     oder keinen Backup-Key enthaelt."""
     try:
-        import json
-        if not os.path.exists(json_path):
+        if not exists(json_path):
             return
-        with io.open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        with ioOpen(json_path, "r", encoding="utf-8") as f:
+            data = load(f)
         settings = data.get(settings_subkey) if settings_subkey else data
         if not isinstance(settings, dict):
             return
@@ -524,7 +524,7 @@ def _restore_serviceapp_settings_from(json_path, settings_subkey):
         if _restore_backup_dict(backup):
             del settings["serviceapp_backup"]
             with open(json_path, "wb") as f:
-                f.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+                f.write(dumps(data, ensure_ascii=False).encode("utf-8"))
             _log("_restore_serviceapp_settings_from: healed %s" % json_path)
     except Exception:
         pass
@@ -536,7 +536,7 @@ def _restore_serviceapp_settings_from(json_path, settings_subkey):
 # (jeder eServiceReference-Typ, auch normales DVB-Live-TV = Typ 1) blockiert
 # die Selbstheilung praktisch IMMER, weil beim Oeffnen eines Plugins so gut
 # wie nie wirklich NICHTS laeuft - es sei denn man zappt gezielt auf einen
-# toten Kanal. Normales Live-TV kann aber gar keine unserer serviceapp_backup-
+# toten Kanal. Normales Live-TV kann aber gar keine der serviceapp_backup-
 # Dateien erzeugt haben, blockiert die Heilung also nur unnoetig.
 _SERVICEAPP_RELEVANT_REF_TYPES = (4097, 5001, 5002)
 
@@ -697,9 +697,9 @@ def _serve_playlist_via_http(content):
         port = server.server_address[1]
 
         def _serve():
-            deadline = time.time() + 120
+            deadline = time() + 120
             try:
-                while time.time() < deadline:
+                while time() < deadline:
                     server.handle_request()
             except Exception as e:
                 _log("playlist server error: " + _to_text(e))
@@ -708,7 +708,7 @@ def _serve_playlist_via_http(content):
             except Exception:
                 pass
 
-        thread = threading.Thread(target=_serve)
+        thread = Thread(target=_serve)
         thread.daemon = True
         thread.start()
 
@@ -759,7 +759,7 @@ def _build_single_quality_playlist(master_url):
         while i < len(lines):
             line = lines[i]
             if line.startswith('#EXT-X-STREAM-INF'):
-                m = re.search(r'BANDWIDTH=(\d+)', line)
+                m = search(r'BANDWIDTH=(\d+)', line)
                 bw = int(m.group(1)) if m else 0
                 for j in range(i + 1, len(lines)):
                     v = lines[j].strip()
@@ -783,7 +783,7 @@ def _build_single_quality_playlist(master_url):
         # ZDF hat 3 Audio-Tracks (TV Ton, Klare Sprache, Audio-Deskription) plus
         # eine Backup-CDN-Gruppe — exteplayer3 lädt alle vorab → langer Start.
         # Lösung: nur TYPE=AUDIO mit passendem GROUP-ID und DEFAULT=YES behalten.
-        audio_group_m = re.search(r'AUDIO="([^"]+)"', best_stream_inf or '')
+        audio_group_m = search(r'AUDIO="([^"]+)"', best_stream_inf or '')
         audio_group = audio_group_m.group(1) if audio_group_m else None
 
         for line in lines:
@@ -794,7 +794,7 @@ def _build_single_quality_playlist(master_url):
                     continue
                 if 'DEFAULT=YES' not in line:
                     continue
-                line = re.sub(
+                line = sub(
                     r'URI="([^"]+)"',
                     lambda m: 'URI="' + _urljoin(master_url, m.group(1)) + '"',
                     line
@@ -815,8 +815,8 @@ def _build_single_quality_playlist(master_url):
             if http_url:
                 return http_url
         else:
-            if not os.path.isdir(_TMP_DIR):
-                os.makedirs(_TMP_DIR)
+            if not isdir(_TMP_DIR):
+                makedirs(_TMP_DIR)
             tmp_path = _tmp_playlist_path(master_url)
             playlist_bytes = playlist.encode('utf-8') if not isinstance(playlist, bytes) else playlist
             with open(tmp_path, 'wb') as f:
@@ -849,11 +849,11 @@ def _resolve_stream(stream_url, title="ÖR Mediathek", force_player_id=None, is_
     is_orf = "apasfiis.sf.apa.at" in stream_url_str
     if not is_live and "ard-mcdn.de" in stream_url_str and "-progressive." not in stream_url_str and stream_url_str.split("?")[0].endswith(".m3u8"):
         is_live = True
-        stream_url_str = re.sub(r'master\w+\.m3u8', 'master.m3u8', stream_url_str)
+        stream_url_str = sub(r'master\w+\.m3u8', 'master.m3u8', stream_url_str)
 
     # ORF _episodes: Q-Varianten sind gesperrt, QXA nicht (bis zu 720p, kein Login nötig)
     if is_orf and "_episodes" in stream_url_str:
-        stream_url_str = re.sub(r'_Q[^./]+\.mp4', '_QXA.mp4', stream_url_str)
+        stream_url_str = sub(r'_Q[^./]+\.mp4', '_QXA.mp4', stream_url_str)
 
     # ORF VOD: Beste Qualität aus Master-Playlist wählen (VOR UA-Anhang)
     if is_orf and not is_live and stream_url_str.split("?")[0].split("#")[0].endswith(".m3u8"):
@@ -962,6 +962,6 @@ def play_stream_async(session, stream_url, title="ÖR Mediathek", force_player_i
             _log("play_stream_async: Fehler bei reactor.callFromThread: " + _fmt_exc())
             _active_play_thread_running = False
 
-    t = threading.Thread(target=worker)
+    t = Thread(target=worker)
     t.daemon = True
     t.start()

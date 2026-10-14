@@ -2,24 +2,22 @@
 # downloader.py
 # HTTP-Download fuer OeMediathek — laedt MP4/TS-Streams direkt auf die Festplatte
 
-import io
-import os
-import json
-import threading
-import re
-import subprocess
-import time
-
-# Python 2/3 Kompatibilitaet
-from urllib.request import urlopen, Request, HTTPRedirectHandler, build_opener, HTTPSHandler
-
-from urllib.parse import urlparse, urljoin
-
-import http.client as _httplib
+from http.client import HTTPConnection, HTTPSConnection
+from io import open as ioOpen
+from json import dump, load
+from os import makedirs, remove, rename
+from os.path import basename, dirname, exists, isdir, join, splitext
+from re import search, sub
+from socket import SHUT_RDWR
+from subprocess import PIPE, Popen
+from threading import Thread
+from time import localtime, sleep, strftime, time
+from urllib.parse import urljoin, urlparse
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener, urlopen
 
 try:
-    import ssl
-    _ssl_context = ssl._create_unverified_context()
+    from ssl import _create_unverified_context
+    _ssl_context = _create_unverified_context()
 except Exception:
     _ssl_context = None
 
@@ -56,13 +54,13 @@ def _to_text(value):
 def _log(msg):
     if not get_debug_logging():
         return
-    line = "[OeMediathek %s] DL: %s" % (time.strftime("%H:%M:%S", time.localtime()), _to_text(msg))
+    line = "[OeMediathek %s] DL: %s" % (strftime("%H:%M:%S", localtime()), _to_text(msg))
     print(line)
     try:
-        log_dir = os.path.dirname(_LOG_FILE)
-        if not os.path.isdir(log_dir):
-            os.makedirs(log_dir)
-        with io.open(_LOG_FILE, "a", encoding="utf-8") as f:
+        log_dir = dirname(_LOG_FILE)
+        if not isdir(log_dir):
+            makedirs(log_dir)
+        with ioOpen(_LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
         pass
@@ -93,9 +91,9 @@ class KeepHeadersRedirectHandler(HTTPRedirectHandler):
 
 def load_settings():
     try:
-        if os.path.exists(SETTINGS_FILE):
-            with io.open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+        if exists(SETTINGS_FILE):
+            with ioOpen(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = load(f)
                 if isinstance(data, dict):
                     return data
     except Exception:
@@ -105,8 +103,8 @@ def load_settings():
 
 def save_settings(settings):
     try:
-        with io.open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, ensure_ascii=False)
+        with ioOpen(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            dump(settings, f, ensure_ascii=False)
     except Exception:
         pass
 
@@ -238,7 +236,7 @@ def set_download_subfolder(enabled):
 def write_info_txt(filepath, title, description=None, duration=None, topic=None):
     """Schreibt eine .txt Datei mit Sendungsinfos neben die Download-Datei."""
     try:
-        txt_path = os.path.splitext(filepath)[0] + ".txt"
+        txt_path = splitext(filepath)[0] + ".txt"
 
         def _dec(v):
             return _to_text(v)
@@ -256,7 +254,7 @@ def write_info_txt(filepath, title, description=None, duration=None, topic=None)
         if top and top.lower() != t.lower():
             lines.append("Sendung: " + top)
         if lines:
-            with io.open(txt_path, "w", encoding="utf-8") as f:
+            with ioOpen(txt_path, "w", encoding="utf-8") as f:
                 f.write("\n\n".join(lines))
     except Exception:
         pass
@@ -269,9 +267,9 @@ def write_meta(filepath, title, description=None, duration=None):
 
         def _dec(v):
             return _to_text(v)
-        display_name = os.path.splitext(os.path.basename(filepath))[0]
+        display_name = splitext(basename(filepath))[0]
         desc_str = _dec(description)
-        ts = int(time.time())
+        ts = int(time())
         dur_secs = 0
         dur_str = _dec(duration)
         if dur_str:
@@ -295,7 +293,7 @@ def write_meta(filepath, title, description=None, duration=None):
             "",
             "0",
         ]
-        with io.open(meta_path, "w", encoding="utf-8") as f:
+        with ioOpen(meta_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
     except Exception:
         pass
@@ -306,14 +304,14 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
     mp4_path = _to_text(mp4_path)
 
     def _run():
-        ts_path = os.path.splitext(mp4_path)[0] + ".ts"
+        ts_path = splitext(mp4_path)[0] + ".ts"
         try:
             _log("ffmpeg Start: %s" % mp4_path)
             cmd = ["ffmpeg", "-y", "-i", mp4_path, "-c", "copy", ts_path]
-            proc = subprocess.Popen(
+            proc = Popen(
                 cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=PIPE,
+                stderr=PIPE,
             )
             _out, _err = proc.communicate()
             if proc.returncode != 0:
@@ -321,13 +319,13 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
                 err_tail = "\n".join(err_str.strip().splitlines()[-5:])
                 raise Exception("ffmpeg Fehler (Code %d): %s" % (proc.returncode, err_tail))
             try:
-                os.remove(mp4_path)
+                remove(mp4_path)
             except Exception:
                 pass
             try:
                 mp4_meta = mp4_path + ".meta"
-                if os.path.exists(mp4_meta):
-                    os.rename(mp4_meta, ts_path + ".meta")
+                if exists(mp4_meta):
+                    rename(mp4_meta, ts_path + ".meta")
             except Exception:
                 pass
             _log("ffmpeg Fertig: %s" % ts_path)
@@ -336,13 +334,13 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
         except Exception as e:
             _log("ffmpeg Fehler: %s — %s" % (mp4_path, str(e)))
             try:
-                if os.path.exists(ts_path):
-                    os.remove(ts_path)
+                if exists(ts_path):
+                    remove(ts_path)
             except Exception:
                 pass
             if on_error:
                 on_error(str(e))
-    t = threading.Thread(target=_run)
+    t = Thread(target=_run)
     t.daemon = True
     t.start()
 
@@ -464,7 +462,7 @@ class _KeepAliveFetcher(object):
                 last_exc = e
                 self._drop_conn(slot)
                 if attempt < retries - 1:
-                    time.sleep(0.5)
+                    sleep(0.5)
         raise last_exc
 
     def _get_conn(self, slot, scheme, host, timeout):
@@ -477,9 +475,9 @@ class _KeepAliveFetcher(object):
             except Exception:
                 pass
         if scheme == "https":
-            conn = _httplib.HTTPSConnection(host, timeout=timeout, context=_ssl_context)
+            conn = HTTPSConnection(host, timeout=timeout, context=_ssl_context)
         else:
-            conn = _httplib.HTTPConnection(host, timeout=timeout)
+            conn = HTTPConnection(host, timeout=timeout)
         self._conns[slot] = (scheme, host, conn)
         return conn
 
@@ -505,407 +503,428 @@ class _KeepAliveFetcher(object):
 # --------------------------------------------------------------------------
 
 class Downloader(object):
-    CHUNK_SIZE = 256 * 1024
+	CHUNK_SIZE = 256 * 1024
 
-    def __init__(self, url, title, topic=None, description=None, duration=None, target_dir=None, on_progress=None, on_done=None, on_error=None):
-        # ORF _episodes: Q-Varianten gesperrt, QXA funktioniert
-        url = _to_text(url)
-        if "apasfiis.sf.apa.at" in url and "_episodes" in url:
-            url = re.sub(r'_Q[^./]+\.mp4', '_QXA.mp4', url)
-        self.url = _to_text(url)
-        self.title = _to_text(title)
-        self.description = _to_text(description)
-        self.duration = _to_text(duration)
-        self.topic = _to_text(topic)
-        self.on_progress = on_progress
-        self.on_done = on_done
-        self.on_error = on_error
+	def __init__(self, url, title, topic=None, description=None, duration=None, target_dir=None, on_progress=None, on_done=None, on_error=None):
+		# ORF _episodes: Q-Varianten gesperrt, QXA funktioniert
+		url = _to_text(url)
+		if "apasfiis.sf.apa.at" in url and "_episodes" in url:
+			url = sub(r'_Q[^./]+\.mp4', '_QXA.mp4', url)
+		self.url = _to_text(url)
+		self.title = _to_text(title)
+		self.description = _to_text(description)
+		self.duration = _to_text(duration)
+		self.topic = _to_text(topic)
+		self.on_progress = on_progress
+		self.on_done = on_done
+		self.on_error = on_error
 
-        self._cancelled = False
-        self._thread = None
-        self._downloaded = 0
-        self._total = 0
+		self._cancelled = False
+		self._thread = None
+		self._downloaded = 0
+		self._total = 0
+		self.response = None
 
-        save_dir = _to_text(target_dir or get_save_dir())
-        os.makedirs(save_dir, exist_ok=True)
-        filename = _make_filename(title, url, topic=topic)
-        base, ext = os.path.splitext(filename)
-        candidate = os.path.join(save_dir, filename)
-        counter = 1
-        while os.path.exists(candidate):
-            candidate = os.path.join(save_dir, "%s_%d%s" % (base, counter, ext))
-            counter += 1
-        self.filepath = candidate
+		save_dir = _to_text(target_dir or get_save_dir())
+		makedirs(save_dir, exist_ok=True)
+		filename = _make_filename(title, url, topic=topic)
+		base, ext = splitext(filename)
+		candidate = join(save_dir, filename)
+		counter = 1
+		while exists(candidate):
+			candidate = join(save_dir, "%s_%d%s" % (base, counter, ext))
+			counter += 1
+		self.filepath = candidate
 
-    def start(self):
-        """Startet den Download in einem Background-Thread."""
-        self._thread = threading.Thread(target=self._run)
-        self._thread.daemon = True
-        self._thread.start()
+	def start(self):
+		"""Startet den Download in einem Background-Thread."""
+		self._thread = Thread(target=self._run)
+		self._thread.daemon = True
+		self._thread.start()
 
-    def cancel(self):
-        """Bricht den laufenden Download ab."""
-        self._cancelled = True
+	def cancel(self):
+		"""Interrupt an active socket read before closing the Python 3 buffer."""
+		self._cancelled = True
+		response = self.response
+		if response is not None:
+			# BufferedReader.close() can wait for the reading thread's lock in Py3.
+			# shutdown wakes that read before close tries to acquire the same lock.
+			try:
+				socket = response.fp.raw._sock
+				socket.shutdown(SHUT_RDWR)
+			except (AttributeError, OSError):
+				pass
 
-    def _download_hls_parallel(self, workers=4):
-        """Laedt HLS-Segmente parallel (workers gleichzeitig) und muxiert Audio+Video mit ffmpeg."""
-        import threading
-        from urllib.parse import urljoin
+			def closeResponse():
+				try:
+					response.close()
+				except Exception:
+					pass
 
-        try:
-            _fetch_opener = build_opener(HTTPSHandler(context=_ssl_context)) if _ssl_context else None
-        except Exception:
-            _fetch_opener = None
+			# Some socket implementations keep read() blocked even after shutdown.
+			# Closing its buffer must never wait on the Enigma2 event loop.
+			Thread(target=closeResponse, daemon=True).start()
 
-        def fetch(url, retries=4):
-            for attempt in range(retries):
-                try:
-                    r = Request(url)
-                    r.add_header("User-Agent", _ORF_USER_AGENT)
-                    if _fetch_opener:
-                        return _fetch_opener.open(r, timeout=30).read()
-                    return urlopen(r, timeout=30).read()
-                except Exception:
-                    if attempt < retries - 1:
-                        time.sleep(2 ** attempt)
-                    else:
-                        raise
+	def _download_hls_parallel(self, workers=4):
+		"""Laedt HLS-Segmente parallel (workers gleichzeitig) und muxiert Audio+Video mit ffmpeg."""
+		from urllib.parse import urljoin
 
-        def get_segments(playlist_url):
-            data = fetch(playlist_url).decode("utf-8", "ignore")
-            return [urljoin(playlist_url, x.strip())
-                    for x in data.splitlines()
-                    if x.strip() and not x.strip().startswith("#")]
+		try:
+			_fetch_opener = build_opener(HTTPSHandler(context=_ssl_context)) if _ssl_context else None
+		except Exception:
+			_fetch_opener = None
 
-        # Master-Playlist auswerten
-        master = fetch(self.url).decode("utf-8", "ignore")
-        lines = master.splitlines()
-        audio_url, best_bw, best_video_url, best_stream_inf = None, -1, None, None
-        i = 0
-        while i < len(lines):
-            if lines[i].startswith("#EXT-X-STREAM-INF"):
-                bw_m = re.search(r"BANDWIDTH=(\d+)", lines[i])
-                bw = int(bw_m.group(1)) if bw_m else 0
-                for j in range(i + 1, len(lines)):
-                    v = lines[j].strip()
-                    if v and not v.startswith("#"):
-                        if bw > best_bw:
-                            best_bw, best_video_url = bw, urljoin(self.url, v)
-                            best_stream_inf = lines[i]
-                        break
-            i += 1
+		def fetch(url, retries=4):
+			for attempt in range(retries):
+				try:
+					r = Request(url)
+					r.add_header("User-Agent", _ORF_USER_AGENT)
+					if _fetch_opener:
+						return _fetch_opener.open(r, timeout=30).read()
+					return urlopen(r, timeout=30).read()
+				except Exception:
+					if attempt < retries - 1:
+						sleep(2 ** attempt)
+					else:
+						raise
 
-        # Nur den Default-Audio-Track der passenden Gruppe verwenden.
-        # ORF hat mehrere Audio-Tracks (Standard, Audiodeskription) — ohne Filterung
-        # wird der letzte Eintrag genommen, was die Audiodeskription sein kann.
-        audio_group_m = re.search(r'AUDIO="([^"]+)"', best_stream_inf or '')
-        audio_group = audio_group_m.group(1) if audio_group_m else None
-        for line in lines:
-            if line.startswith("#EXT-X-MEDIA") and "TYPE=AUDIO" in line:
-                if audio_group and ('GROUP-ID="%s"' % audio_group) not in line:
-                    continue
-                if "DEFAULT=YES" not in line:
-                    continue
-                m = re.search(r'URI="([^"]+)"', line)
-                if m:
-                    audio_url = urljoin(self.url, m.group(1))
-        if not best_video_url:
-            best_video_url = self.url
+		def get_segments(playlist_url):
+			data = fetch(playlist_url).decode("utf-8", "ignore")
+			return [urljoin(playlist_url, x.strip()) for x in data.splitlines() if x.strip() and not x.strip().startswith("#")]
 
-        video_segs = get_segments(best_video_url)
-        audio_segs = get_segments(audio_url) if audio_url else []
-        _log("ORF parallel: %d Video + %d Audio Segmente, %d workers" % (len(video_segs), len(audio_segs), workers))
+		# Master-Playlist auswerten
+		master = fetch(self.url).decode("utf-8", "ignore")
+		lines = master.splitlines()
+		audio_url, best_bw, best_video_url, best_stream_inf = None, -1, None, None
+		i = 0
+		while i < len(lines):
+			if lines[i].startswith("#EXT-X-STREAM-INF"):
+				bw_m = search(r"BANDWIDTH=(\d+)", lines[i])
+				bw = int(bw_m.group(1)) if bw_m else 0
+				for j in range(i + 1, len(lines)):
+					v = lines[j].strip()
+					if v and not v.startswith("#"):
+						if bw > best_bw:
+							best_bw, best_video_url = bw, urljoin(self.url, v)
+							best_stream_inf = lines[i]
+						break
+			i += 1
 
-        fp = self.filepath if isinstance(self.filepath, str) else self.filepath.decode("utf-8", "replace")
-        vid_tmp = fp + ".vid.tmp"
-        aud_tmp = fp + ".aud.tmp"
-        self._total = 0
-        self._downloaded = 0
-        self._muxing = False
-        self._total_segs = len(video_segs) + len(audio_segs)
-        self._segs_done = 0
+		# Nur den Default-Audio-Track der passenden Gruppe verwenden.
+		# ORF hat mehrere Audio-Tracks (Standard, Audiodeskription) — ohne Filterung
+		# wird der letzte Eintrag genommen, was die Audiodeskription sein kann.
+		audio_group_m = search(r'AUDIO="([^"]+)"', best_stream_inf or '')
+		audio_group = audio_group_m.group(1) if audio_group_m else None
+		for line in lines:
+			if line.startswith("#EXT-X-MEDIA") and "TYPE=AUDIO" in line:
+				if audio_group and ('GROUP-ID="%s"' % audio_group) not in line:
+					continue
+				if "DEFAULT=YES" not in line:
+					continue
+				m = search(r'URI="([^"]+)"', line)
+				if m:
+					audio_url = urljoin(self.url, m.group(1))
+		if not best_video_url:
+			best_video_url = self.url
 
-        # Eine Connection pro Worker-Slot, wiederverwendet ueber alle Batches
-        # UND ueber Video- und Audio-Download hinweg (meist derselbe Host) -
-        # vermeidet den TLS-Handshake pro Segment, siehe Klassen-Docstring.
-        keepalive = _KeepAliveFetcher({"User-Agent": _ORF_USER_AGENT})
+		video_segs = get_segments(best_video_url)
+		audio_segs = get_segments(audio_url) if audio_url else []
+		_log("ORF parallel: %d Video + %d Audio Segmente, %d workers" % (len(video_segs), len(audio_segs), workers))
 
-        def download_batched(segs, out_path):
-            with open(out_path, "wb") as f:
-                for start in range(0, len(segs), workers):
-                    if self._cancelled:
-                        return
-                    batch = segs[start:start + workers]
-                    results = [None] * len(batch)
-                    errors = []
+		fp = self.filepath if isinstance(self.filepath, str) else self.filepath.decode("utf-8", "replace")
+		vid_tmp = fp + ".vid.tmp"
+		aud_tmp = fp + ".aud.tmp"
+		self._total = 0
+		self._downloaded = 0
+		self._muxing = False
+		self._total_segs = len(video_segs) + len(audio_segs)
+		self._segs_done = 0
 
-                    def _worker(url, idx):
-                        try:
-                            results[idx] = keepalive.fetch(url, idx)
-                        except Exception as e:
-                            errors.append(e)
+		# Eine Connection pro Worker-Slot, wiederverwendet ueber alle Batches
+		# UND ueber Video- und Audio-Download hinweg (meist derselbe Host) -
+		# vermeidet den TLS-Handshake pro Segment, siehe Klassen-Docstring.
+		keepalive = _KeepAliveFetcher({"User-Agent": _ORF_USER_AGENT})
 
-                    threads = [threading.Thread(target=_worker, args=(url, idx))
-                               for idx, url in enumerate(batch)]
-                    for t in threads:
-                        t.start()
-                    for t in threads:
-                        t.join()
-                    if errors:
-                        raise errors[0]
-                    for data in results:
-                        if data:
-                            f.write(data)
-                            self._downloaded += len(data)
-                            self._segs_done += 1
-                            if self.on_progress:
-                                self.on_progress(self._downloaded, 0)
+		def download_batched(segs, out_path):
+			with open(out_path, "wb") as f:
+				for start in range(0, len(segs), workers):
+					if self._cancelled:
+						return
+					batch = segs[start:start + workers]
+					results = [None] * len(batch)
+					errors = []
 
-        try:
-            download_batched(video_segs, vid_tmp)
-            if self._cancelled:
-                for p in (vid_tmp,):
-                    try:
-                        os.remove(p)
-                    except Exception:
-                        pass
-                return
+					def _worker(url, idx):
+						try:
+							results[idx] = keepalive.fetch(url, idx)
+						except Exception as e:
+							errors.append(e)
 
-            if audio_segs:
-                download_batched(audio_segs, aud_tmp)
-                if self._cancelled:
-                    for p in (vid_tmp, aud_tmp):
-                        try:
-                            os.remove(p)
-                        except Exception:
-                            pass
-                    return
-                cmd = ["ffmpeg", "-y", "-i", vid_tmp, "-i", aud_tmp,
-                       "-c", "copy", "-f", "mpegts", fp]
-                self._muxing = True
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                _out, err = proc.communicate()
-                self._muxing = False
-                for p in (vid_tmp, aud_tmp):
-                    try:
-                        os.remove(p)
-                    except Exception:
-                        pass
-                if proc.returncode != 0:
-                    raise Exception("ffmpeg Mux Fehler (Code %d): %s" % (proc.returncode, _decode_bytes(err[-300:])))
-            else:
-                os.rename(vid_tmp, fp)
-            _log("ORF parallel fertig: %s" % fp)
-        finally:
-            keepalive.close_all()
+					threads = [Thread(target=_worker, args=(url, idx)) for idx, url in enumerate(batch)]
+					for t in threads:
+						t.start()
+					for t in threads:
+						t.join()
+					if errors:
+						raise errors[0]
+					for data in results:
+						if data:
+							f.write(data)
+							self._downloaded += len(data)
+							self._segs_done += 1
+							if self.on_progress:
+								self.on_progress(self._downloaded, 0)
 
-    def _download_m3u8(self, opener, url):
-        """Laedt HLS-Streams (m3u8) herunter, indem alle .ts-Segmente aneinandergehaengt werden."""
-        req = Request(url)
-        req.add_header("User-Agent", _ORF_USER_AGENT)
-        req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
+		try:
+			download_batched(video_segs, vid_tmp)
+			if self._cancelled:
+				for p in (vid_tmp,):
+					try:
+						remove(p)
+					except Exception:
+						pass
+				return
 
-        resp = opener.open(req, timeout=30)
-        try:
-            manifest = _decode_bytes(resp.read())
-        finally:
-            try:
-                resp.close()
-            except Exception:
-                pass
-        lines = manifest.split("\n")
+			if audio_segs:
+				download_batched(audio_segs, aud_tmp)
+				if self._cancelled:
+					for p in (vid_tmp, aud_tmp):
+						try:
+							remove(p)
+						except Exception:
+							pass
+					return
+				cmd = ["ffmpeg", "-y", "-i", vid_tmp, "-i", aud_tmp, "-c", "copy", "-f", "mpegts", fp]
+				self._muxing = True
+				proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
+				_out, err = proc.communicate()
+				self._muxing = False
+				for p in (vid_tmp, aud_tmp):
+					try:
+						remove(p)
+					except Exception:
+						pass
+				if proc.returncode != 0:
+					raise Exception("ffmpeg Mux Fehler (Code %d): %s" % (proc.returncode, _decode_bytes(err[-300:])))
+			else:
+				rename(vid_tmp, fp)
+			_log("ORF parallel fertig: %s" % fp)
+		finally:
+			keepalive.close_all()
 
-        if "#EXT-X-STREAM-INF" in manifest:
-            sub_url = None
-            for i, line in enumerate(lines):
-                if line.startswith("#EXT-X-STREAM-INF"):
-                    for j in range(i + 1, len(lines)):
-                        if lines[j].strip() and not lines[j].startswith("#"):
-                            sub_url = lines[j].strip()
-                            break
-            if sub_url:
-                if not sub_url.startswith("http"):
-                    sub_url = urljoin(url, sub_url)
-                return self._download_m3u8(opener, sub_url)
+	def _download_m3u8(self, opener, url):
+		"""Laedt HLS-Streams (m3u8) herunter, indem alle .ts-Segmente aneinandergehaengt werden."""
+		req = Request(url)
+		req.add_header("User-Agent", _ORF_USER_AGENT)
+		req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
 
-        segments = []
+		resp = opener.open(req, timeout=30)
+		try:
+			manifest = _decode_bytes(resp.read())
+		finally:
+			try:
+				resp.close()
+			except Exception:
+				pass
+		lines = manifest.split("\n")
 
-        for line in lines:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                if not line.startswith("http"):
-                    line = urljoin(url, line)
-                segments.append(line)
+		if "#EXT-X-STREAM-INF" in manifest:
+			sub_url = None
+			for i, line in enumerate(lines):
+				if line.startswith("#EXT-X-STREAM-INF"):
+					for j in range(i + 1, len(lines)):
+						if lines[j].strip() and not lines[j].startswith("#"):
+							sub_url = lines[j].strip()
+							break
+			if sub_url:
+				if not sub_url.startswith("http"):
+					sub_url = urljoin(url, sub_url)
+				return self._download_m3u8(opener, sub_url)
 
-        if not segments:
-            raise Exception("Keine Videosegmente im Stream gefunden")
+		segments = []
 
-        self._total = 0
-        self._downloaded = 0
+		for line in lines:
+			line = line.strip()
+			if line and not line.startswith("#"):
+				if not line.startswith("http"):
+					line = urljoin(url, line)
+				segments.append(line)
 
-        with open(self.filepath, "wb") as f:
-            for seg_url in segments:
-                if self._cancelled:
-                    break
-                seg_req = Request(seg_url)
-                seg_req.add_header("User-Agent", _ORF_USER_AGENT)
-                seg_resp = opener.open(seg_req, timeout=30)
-                try:
-                    chunk = seg_resp.read()
-                finally:
-                    try:
-                        seg_resp.close()
-                    except Exception:
-                        pass
-                f.write(chunk)
-                self._downloaded += len(chunk)
-                if self.on_progress:
-                    self.on_progress(self._downloaded, 0)
+		if not segments:
+			raise Exception("Keine Videosegmente im Stream gefunden")
 
-    def _run(self):
-        resp = None
-        try:
-            _log("Start: %s" % self.title)
-            os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+		self._total = 0
+		self._downloaded = 0
 
-            handlers = [KeepHeadersRedirectHandler()]
-            if _ssl_context:
-                handlers.append(HTTPSHandler(context=_ssl_context))
-            opener = build_opener(*handlers)
+		with open(self.filepath, "wb") as f:
+			for seg_url in segments:
+				if self._cancelled:
+					break
+				seg_req = Request(seg_url)
+				seg_req.add_header("User-Agent", _ORF_USER_AGENT)
+				seg_resp = opener.open(seg_req, timeout=30)
+				try:
+					chunk = seg_resp.read()
+				finally:
+					try:
+						seg_resp.close()
+					except Exception:
+						pass
+				f.write(chunk)
+				self._downloaded += len(chunk)
+				if self.on_progress:
+					self.on_progress(self._downloaded, 0)
 
-            is_m3u8 = self.url.split("?")[0].lower().endswith((".m3u8", ".m3u"))
+	def _run(self):
+		resp = None
+		try:
+			_log("Start: %s" % self.title)
+			makedirs(dirname(self.filepath), exist_ok=True)
 
-            if is_m3u8 and "apasfiis.sf.apa.at" in self.url:
-                # ORF HLS: parallele Segment-Downloads (umgeht CDN-Drosselung pro Verbindung)
-                self._download_hls_parallel(workers=4)
-            elif is_m3u8:
-                self._download_m3u8(opener, self.url)
-            else:
-                # Standard MP4-Download
-                def _open_mp4(offset):
-                    req = Request(self.url)
-                    req.add_header("User-Agent", _ORF_USER_AGENT)
-                    req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
-                    if offset:
-                        req.add_header("Range", "bytes=%d-" % offset)
-                    # Kurzer Timeout statt 30s: gilt in urllib2/urllib.request fuer die
-                    # gesamte Socket-Lebensdauer, nicht nur den Verbindungsaufbau -
-                    # jeder read()-Call unten respektiert ihn also auch. Ohne das kann
-                    # ein einzelner read()-Call bei einer traegen Quelle minutenlang
-                    # blockieren, wodurch cancel() (nur ein kooperatives Flag, geprueft
-                    # zwischen zwei read()-Aufrufen) entsprechend lange nicht greift.
-                    return opener.open(req, timeout=5)
+			handlers = [KeepHeadersRedirectHandler()]
+			if _ssl_context:
+				handlers.append(HTTPSHandler(context=_ssl_context))
+			opener = build_opener(*handlers)
 
-                resp = _open_mp4(0)
+			is_m3u8 = self.url.split("?")[0].lower().endswith((".m3u8", ".m3u"))
 
-                total = 0
-                try:
-                    length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
-                    if length:
-                        total = int(length)
-                except Exception:
-                    pass
+			if is_m3u8 and "apasfiis.sf.apa.at" in self.url:
+				# ORF HLS: parallele Segment-Downloads (umgeht CDN-Drosselung pro Verbindung)
+				self._download_hls_parallel(workers=4)
+			elif is_m3u8:
+				self._download_m3u8(opener, self.url)
+			else:
+				# Standard MP4-Download
+				def _open_mp4(offset):
+					req = Request(self.url)
+					req.add_header("User-Agent", _ORF_USER_AGENT)
+					req.add_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+					req.add_header("Accept-Language", "de-DE,de;q=0.9,en-AT;q=0.8,en;q=0.7")
+					if offset:
+						req.add_header("Range", "bytes=%d-" % offset)
+					# Allow slow sources 35 seconds per socket operation, as upstream.
+					# User cancellation interrupts the active response independently.
+					return opener.open(req, timeout=35)
 
-                downloaded = 0
-                reconnects = 0
-                reconnect_pos = 0
-                MAX_RECONNECTS = 3
-                with open(self.filepath, "wb") as f:
-                    while not self._cancelled:
-                        reconnect_msg = None
-                        try:
-                            chunk = resp.read(self.CHUNK_SIZE)
-                        except Exception as e:
-                            # Bei HTTPS landet ein Read-Timeout je nach Python-/SSL-
-                            # Version als socket.timeout ODER als ssl.SSLError -
-                            # ssl.SSLError ist KEIN Subtyp von socket.timeout, daher
-                            # hier ueber die Meldung statt die exakte Klasse pruefen.
-                            if "timed out" not in str(e).lower():
-                                raise
-                            # Nach einem Read-Timeout nicht auf demselben Socket
-                            # weiterlesen: per Range ab der wirklich geschriebenen
-                            # Position fortsetzen, damit keine gepufferten Bytes fehlen.
-                            reconnect_msg = "Verbindung abgebrochen (keine Daten mehr empfangen)"
-                        else:
-                            if not chunk:
-                                if not (total and downloaded < total):
-                                    break
-                                # Sauberer EOF vor Content-Length ist unvollstaendig;
-                                # die fehlenden Bytes ueber eine neue Verbindung holen.
-                                reconnect_msg = "Download unvollständig (Verbindung vorzeitig beendet)"
-                        if reconnect_msg:
-                            try:
-                                resp.close()
-                            except Exception:
-                                pass
-                            new_resp = None
-                            while new_resp is None and not self._cancelled:
-                                if reconnects >= MAX_RECONNECTS:
-                                    raise Exception(reconnect_msg)
-                                reconnects += 1
-                                _log("Download-Reconnect %d/%d ab Byte %d: %s" % (reconnects, MAX_RECONNECTS, downloaded, self.title))
-                                time.sleep(2)
-                                if self._cancelled:
-                                    break
-                                try:
-                                    new_resp = _open_mp4(downloaded)
-                                except Exception:
-                                    new_resp = None
-                            if self._cancelled:
-                                break
-                            reconnect_pos = downloaded
-                            resp = new_resp
-                            if resp.getcode() != 206:
-                                # Server ignoriert Range: mit der vollstaendigen
-                                # Antwort neu beginnen, statt Daten doppelt anzuhängen.
-                                f.seek(0)
-                                f.truncate()
-                                downloaded = 0
-                                reconnect_pos = 0
-                            continue
-                        if reconnects and downloaded - reconnect_pos >= 4 * 1024 * 1024:
-                            # Nach stabiler Verbindung gelegentliche Aussetzer
-                            # nicht ueber den ganzen Download aufsummieren.
-                            reconnects = 0
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        self._downloaded = downloaded
-                        self._total = total
-                        if self.on_progress:
-                            self.on_progress(downloaded, total)
+				resp = _open_mp4(0)
+				self.response = resp
 
-            if self._cancelled:
-                try:
-                    os.remove(self.filepath)
-                except Exception:
-                    pass
-                _log("Abgebrochen: %s" % self.title)
-                if self.on_error:
-                    self.on_error("Abgebrochen")
-            else:
-                extra_info = get_download_extra_info()
-                if extra_info in ("txt", "both"):
-                    write_info_txt(self.filepath, self.title, self.description, self.duration, self.topic)
-                if extra_info in ("meta", "both"):
-                    write_meta(self.filepath, self.title, self.description, self.duration)
-                _log("Fertig: %s" % self.title)
-                if self.on_done:
-                    self.on_done(self.filepath)
+				total = 0
+				try:
+					length = resp.headers.get("Content-Length") or resp.info().get("Content-Length")
+					if length:
+						total = int(length)
+				except Exception:
+					pass
 
-        except Exception as e:
-            _log("Fehler: %s — %s" % (self.title, str(e)))
-            try:
-                if os.path.exists(self.filepath):
-                    os.remove(self.filepath)
-            except Exception:
-                pass
-            if self.on_error:
-                self.on_error(str(e))
-        finally:
-            if resp is not None:
-                try:
-                    resp.close()
-                except Exception:
-                    pass
+				downloaded = 0
+				reconnects = 0
+				reconnect_pos = 0
+				MAX_RECONNECTS = 5
+				with open(self.filepath, "wb", 1024 * 1024) as f:
+					while not self._cancelled:
+						reconnect_msg = None
+						try:
+							chunk = resp.read(self.CHUNK_SIZE)
+						except Exception as e:
+							if self._cancelled:
+								break
+							# Bei HTTPS landet ein Read-Timeout je nach Python-/SSL-
+							# Version als socket.timeout ODER als ssl.SSLError -
+							# ssl.SSLError ist KEIN Subtyp von socket.timeout, daher
+							# hier ueber die Meldung statt die exakte Klasse pruefen.
+							if "timed out" not in str(e).lower():
+								raise
+							# Nach einem Read-Timeout nicht auf demselben Socket
+							# weiterlesen: per Range ab der wirklich geschriebenen
+							# Position fortsetzen, damit keine gepufferten Bytes fehlen.
+							reconnect_msg = "Verbindung abgebrochen (keine Daten mehr empfangen)"
+						else:
+							if not chunk:
+								if not (total and downloaded < total):
+									break
+								# Sauberer EOF vor Content-Length ist unvollstaendig;
+								# die fehlenden Bytes ueber eine neue Verbindung holen.
+								reconnect_msg = "Download unvollständig (Verbindung vorzeitig beendet)"
+						if reconnect_msg:
+							try:
+								resp.close()
+							except Exception:
+								pass
+							new_resp = None
+							while new_resp is None and not self._cancelled:
+								if reconnects >= MAX_RECONNECTS:
+									raise Exception(reconnect_msg)
+								reconnects += 1
+								_log("Download-Reconnect %d/%d ab Byte %d: %s" % (reconnects, MAX_RECONNECTS, downloaded, self.title))
+								sleep(1)
+								if self._cancelled:
+									break
+								try:
+									new_resp = _open_mp4(downloaded)
+								except Exception:
+									new_resp = None
+							if self._cancelled:
+								break
+							reconnect_pos = downloaded
+							resp = new_resp
+							self.response = resp
+							if resp.getcode() != 206:
+								# Server ignoriert Range: mit der vollstaendigen
+								# Antwort neu beginnen, statt Daten doppelt anzuhängen.
+								f.seek(0)
+								f.truncate()
+								downloaded = 0
+								reconnect_pos = 0
+							continue
+						if reconnects and downloaded - reconnect_pos >= 4 * 1024 * 1024:
+							# Nach stabiler Verbindung gelegentliche Aussetzer
+							# nicht ueber den ganzen Download aufsummieren.
+							reconnects = 0
+						f.write(chunk)
+						downloaded += len(chunk)
+						self._downloaded = downloaded
+						self._total = total
+						if self.on_progress:
+							self.on_progress(downloaded, total)
+				try:
+					resp.close()
+				except Exception:
+					pass
+				self.response = None
+
+			if self._cancelled:
+				try:
+					remove(self.filepath)
+				except Exception:
+					pass
+				_log("Abgebrochen: %s" % self.title)
+				if self.on_error:
+					self.on_error("Abgebrochen")
+			else:
+				extra_info = get_download_extra_info()
+				if extra_info in ("txt", "both"):
+					write_info_txt(self.filepath, self.title, self.description, self.duration, self.topic)
+				if extra_info in ("meta", "both"):
+					write_meta(self.filepath, self.title, self.description, self.duration)
+				_log("Fertig: %s" % self.title)
+				if self.on_done:
+					self.on_done(self.filepath)
+
+		except Exception as e:
+			_log("Fehler: %s — %s" % (self.title, str(e)))
+			try:
+				if exists(self.filepath):
+					remove(self.filepath)
+			except Exception:
+				pass
+			if self.on_error:
+				self.on_error(str(e))
+		finally:
+			self.response = None
+			if resp is not None:
+				try:
+					resp.close()
+				except Exception:
+					pass
