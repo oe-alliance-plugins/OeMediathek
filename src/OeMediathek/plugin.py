@@ -6,7 +6,7 @@ from os import listdir, makedirs, remove
 from os.path import dirname, exists, isdir, join
 from re import search, sub
 from threading import Thread, Timer
-from time import time
+from time import localtime, strftime, time
 from urllib.error import HTTPError
 from urllib.parse import urlparse as _urlparse
 from urllib.request import Request, urlopen
@@ -4361,6 +4361,10 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 
 		is_direct_hits = self.cur_group_name.startswith(">> Direkte Treffer")
 		show_group = is_direct_hits or self.source_name == "Meine Favoriten"
+		# Announced broadcasts carry the stream of the channel they will run on;
+		# they belong to "Demnaechst", not to the episodes that can be played now
+		now = time()
+		episodes = [x for x in (self._fetch_episodes_result or []) if x.get("timestamp", 0) <= now]
 
 		if self._ep_sort_mode == "title":
 			# Sortierschluessel MUSS exakt dem Anzeigetext entsprechen (inkl. Topic-
@@ -4371,10 +4375,10 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 					return lb.decode("utf-8", "replace").lower()
 				except Exception:
 					return str(lb).lower()
-			self.cur_episodes = sorted(self._fetch_episodes_result, key=_sort_key)
+			self.cur_episodes = sorted(episodes, key=_sort_key)
 			self.ep_has_more = False
 		else:
-			self.cur_episodes = self._fetch_episodes_result
+			self.cur_episodes = episodes
 			self.ep_has_more = getattr(self, "_ep_api_has_more", False)
 
 		self._set_list([_episode_label(i["title"], i.get("group") if show_group else None, watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes])
@@ -4819,6 +4823,11 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 			else:
 				if idx < len(self.cur_episodes):
 					item = self.cur_episodes[idx]
+
+					# Before its start an announced broadcast plays whatever its channel shows
+					if item.get("timestamp", 0) > time():
+						self["status_label"].setText(_b("Noch nicht verfügbar, geplant: %s" % strftime("%d.%m.%y %H:%M", localtime(item["timestamp"]))))
+						return
 
 					if self.force_uhd:
 						base = _episode_stream_url(item)
