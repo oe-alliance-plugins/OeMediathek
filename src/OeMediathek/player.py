@@ -847,9 +847,12 @@ def _resolve_stream(stream_url, title="ÖR Mediathek", force_player_id=None, is_
     _log("_resolve_stream: title=" + str(title) + " is_live=" + str(is_live) + " url=" + str(stream_url_str))
 
     is_orf = "apasfiis.sf.apa.at" in stream_url_str
-    if not is_live and "ard-mcdn.de" in stream_url_str and "-progressive." not in stream_url_str and stream_url_str.split("?")[0].endswith(".m3u8"):
+    # ARD hands out a single video variant (master1080p5000, master-1080p-5000, ...);
+    # the audio is a separate rendition that only the master playlist lists
+    is_ard_hls = "ard-mcdn.de" in stream_url_str or "event.akamaized.net" in stream_url_str
+    if not is_live and is_ard_hls and "-progressive." not in stream_url_str and stream_url_str.split("?")[0].endswith(".m3u8"):
         is_live = True
-        stream_url_str = sub(r'master\w+\.m3u8', 'master.m3u8', stream_url_str)
+        stream_url_str = sub(r'master[\w-]+\.m3u8', 'master.m3u8', stream_url_str)
 
     # ORF _episodes: Q-Varianten sind gesperrt, QXA nicht (bis zu 720p, kein Login nötig)
     if is_orf and "_episodes" in stream_url_str:
