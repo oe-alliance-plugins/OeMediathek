@@ -849,7 +849,7 @@ def _resolve_stream(stream_url, title="ÖR Mediathek", force_player_id=None, is_
     is_orf = "apasfiis.sf.apa.at" in stream_url_str
     # ARD hands out a single video variant (master1080p5000, master-1080p-5000, ...);
     # the audio is a separate rendition that only the master playlist lists
-    is_ard_hls = "ard-mcdn.de" in stream_url_str or "event.akamaized.net" in stream_url_str
+    is_ard_hls = any(x in stream_url_str for x in ("ard-mcdn.de", "event.akamaized.net", "mcdn.ndr.de"))
     if not is_live and is_ard_hls and "-progressive." not in stream_url_str and stream_url_str.split("?")[0].endswith(".m3u8"):
         is_live = True
         stream_url_str = sub(r'master[\w-]+\.m3u8', 'master.m3u8', stream_url_str)
