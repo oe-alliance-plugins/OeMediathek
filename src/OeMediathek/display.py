@@ -40,15 +40,7 @@ class DisplayHelper:
 		screen.session.openWithCallback(modeChosen, pickerClass, title="Icon auf Frontdisplay:", choices=choices)
 
 	def getIconX(self, iconWidth=220, displayWidth=400):
-		position = (displayWidth - iconWidth) // 2
-		try:
-			with open("/proc/stb/lcd/bpp", encoding="ascii") as displayFile:
-				# Nexus drivers halve the rendered X coordinate; older drivers do not.
-				if displayFile.read().strip() == "10":
-					position *= 2
-		except OSError:
-			pass
-		return position
+		return (displayWidth - iconWidth) // 2
 
 	def getSummaryClass(self, duringPlayback=False):
 		try:

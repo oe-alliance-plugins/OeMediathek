@@ -3625,6 +3625,11 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 		self._desc_timer.callback.append(self._update_desc)
 		self._desc_timer.start(250, False)
 
+		self.descScrollPosition = 0
+		self.descScrollMax = 0
+		self.descScrollTimer = eTimer()
+		self.descScrollTimer.callback.append(self.scrollDescription)
+
 		self._toast_timer = eTimer()
 		self._toast_timer.callback.append(self._clear_toast)
 		self._saved_status = None
@@ -3673,7 +3678,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 			self._first_desc_timer.stop()
 		except Exception:
 			pass
-		for timer, cb in ((self._start_timer, self._start_fetch), (self._poll_timer, self._poll_fetch), (self._desc_timer, self._update_desc), (self._toast_timer, self._clear_toast)):
+		for timer, cb in ((self._start_timer, self._start_fetch), (self._poll_timer, self._poll_fetch), (self._desc_timer, self._update_desc), (self.descScrollTimer, self.scrollDescription), (self._toast_timer, self._clear_toast)):
 			try:
 				if timer:
 					timer.stop()
@@ -3683,6 +3688,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 		self._start_timer = None
 		self._poll_timer = None
 		self._desc_timer = None
+		self.descScrollTimer = None
 		self._toast_timer = None
 		if getattr(self, "_dl_poll_timer", None):
 			try:
@@ -3878,6 +3884,32 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 						ts_label = "Geplant" if ts > _time.time() else "Hinzugefügt"
 						full_text = full_text + _b("\n\n" + ts_label + ": " + ts_str)
 					self["description_text"].setText(full_text)
+			self.restartDescriptionScroll()
+		except Exception:
+			pass
+
+	def restartDescriptionScroll(self):
+		"""Reset the timer and position whenever the selected description changes."""
+		self.descScrollTimer.stop()
+		self.descScrollPosition = 0
+		widget = self["description_text"]
+		self.descScrollMax = max(0, widget.totalTextHeight - widget.pageHeight)
+		if self.descScrollMax > 0:
+			self.descScrollTimer.start(5000, True)
+
+	def scrollDescription(self):
+		"""Scroll two pixels per 60 ms, pausing five seconds above and four below."""
+		try:
+			widget = self["description_text"]
+			if self.descScrollPosition >= self.descScrollMax:
+				self.descScrollPosition = 0
+				widget.setPos(0)
+				self.descScrollTimer.start(5000, True)
+				return
+			self.descScrollPosition = min(self.descScrollPosition + 2, self.descScrollMax)
+			widget.setPos(self.descScrollPosition)
+			atBottom = self.descScrollPosition >= self.descScrollMax
+			self.descScrollTimer.start(4000 if atBottom else 60, True)
 		except Exception:
 			pass
 
