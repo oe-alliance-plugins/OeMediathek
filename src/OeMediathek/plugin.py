@@ -25,7 +25,7 @@ from Screens.VirtualKeyBoard import VirtualKeyBoard
 from .display import LcdIconSummaryMixin, displayHelper
 from .download_manager import OeMediathekDownloadManagerScreen
 from .downloader import Downloader, convert_mp4_to_ts, get_auto_convert, get_content_length, get_debug_logging, get_download_extra_info_label, get_download_quality, get_download_quality_label, get_download_subfolder, get_force_exteplayer, get_live_tv_background, get_save_dir, get_serviceapp_autoconfigure, get_stream_quality, get_stream_quality_label, get_tile_wrap_lr, set_auto_convert, set_debug_logging, set_download_extra_info, set_download_quality, set_download_subfolder, set_force_exteplayer, set_live_tv_background, set_save_dir, set_serviceapp_autoconfigure, set_stream_quality, set_tile_wrap_lr
-from .mediathek import _mvw_query, add_episode_favorite, add_favorite, get_3sat_highlights, get_all_highlights, get_ard_alpha_highlights, get_ard_highlights, get_arte_highlights, get_br_highlights, get_dw_highlights, get_episode_favorites, get_favorites, get_funk_highlights, get_hr_highlights, get_kika_highlights, get_mdr_highlights, get_ndr_highlights, get_one_highlights, get_orf_highlights, get_phoenix_highlights, get_radio_bremen_highlights, get_rbb_highlights, get_sr_highlights, get_srf_highlights, get_swr_highlights, get_tagesschau24_highlights, get_topics, get_wdr_highlights, get_zdf_highlights, get_zdf_uhd_no_hdr_topics, get_zdf_uhd_shows, get_zdf_uhd_static_episodes, get_zdf_uhd_static_topics, get_zdf_uhd_topic_episodes, get_zdf_uhd_topic_quality, get_zdfinfo_highlights, get_zdfneo_highlights, is_episode_favorite, is_favorite, is_watched, load_search_history, refresh_uhd_static, remove_episode_favorite, remove_favorite, reorder_favorites, resolve_uhd_url, resolve_uhd_url_via_document_api, save_search_history, toggle_watched, uhd_url_candidates
+from .mediathek import _mvw_query, add_episode_favorite, add_favorite, channelHelper, get_3sat_highlights, get_all_highlights, get_ard_alpha_highlights, get_ard_highlights, get_arte_highlights, get_br_highlights, get_dw_highlights, get_episode_favorites, get_favorites, get_funk_highlights, get_hr_highlights, get_kika_highlights, get_mdr_highlights, get_ndr_highlights, get_one_highlights, get_orf_highlights, get_phoenix_highlights, get_radio_bremen_highlights, get_rbb_highlights, get_sr_highlights, get_srf_highlights, get_swr_highlights, get_tagesschau24_highlights, get_topics, get_wdr_highlights, get_zdf_highlights, get_zdf_uhd_no_hdr_topics, get_zdf_uhd_shows, get_zdf_uhd_static_episodes, get_zdf_uhd_static_topics, get_zdf_uhd_topic_episodes, get_zdf_uhd_topic_quality, get_zdfinfo_highlights, get_zdfneo_highlights, is_episode_favorite, is_favorite, is_watched, load_search_history, refresh_uhd_static, remove_episode_favorite, remove_favorite, reorder_favorites, resolve_uhd_url, resolve_uhd_url_via_document_api, save_search_history, toggle_watched, uhd_url_candidates
 from .player import _self_heal_all_serviceapp_backups, black_background_ref, play_stream_async
 
 try:
@@ -65,7 +65,7 @@ _AZ_CH_MAP = {
     "BR Mediathek": "BR", "MDR Mediathek": "MDR", "HR Mediathek": "HR",
     "SWR Mediathek": "SWR", "rbb Mediathek": "RBB", "SR Mediathek": "SR",
     "ZDF Info": "ZDFinfo", "ZDF Neo": "ZDFneo", "KiKA": "KiKA",
-    "Phoenix": "PHOENIX", "Radio Bremen": "Radio Bremen TV", "funk": "Funk.net",
+    "Phoenix": "PHOENIX", "Radio Bremen": "rbtv", "funk": "Funk.net",
     "ARD alpha": "ARD-alpha", "ONE": "ONE", "tagesschau24": "tagesschau24",
     "DW": "DW", "ORF": "ORF", "SRF": "SRF",
 }
@@ -182,152 +182,165 @@ def _b(val):
 
 
 LIVE_EVENT_GROUPS = [
-    # (Gruppenname, [(Anzeigename, Stream-URL), ...])
-    ("Arte Concert", [
-        ("Arte Concert 1", "https://arteconcerthls.akamaized.net/hls/live/2025494/channel01/master.m3u8"),
-        ("Arte Concert 2", "https://arteconcerthls.akamaized.net/hls/live/2025495/channel02/master.m3u8"),
-        ("Arte Concert 3", "https://arteconcerthls.akamaized.net/hls/live/2025496/channel03/master.m3u8"),
-        ("Arte Concert 4", "https://arteconcerthls.akamaized.net/hls/live/2025497/channel04/master.m3u8"),
-        ("Arte Concert 5", "https://arteconcerthls.akamaized.net/hls/live/2025498/channel05/master.m3u8"),
-        ("Arte Concert 6", "https://arteconcerthls.akamaized.net/hls/live/2025499/channel06/master.m3u8"),
-    ]),
-    ("ARD / Sportschau", [
-        ("ARD Event 1 (weltweit)", "https://ardevent1.akamaized.net/hls/live/681511/wdr_msl4_ardevent1/master.m3u8"),
-        ("ARD Event 2 (DE)", "https://ardevent2.akamaized.net/hls/live/681512/wdr_msl4_ardevent2/master.m3u8"),
-        ("Sportschau Event 1", "http://sportschau-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
-        ("Sportschau Event 2", "http://sportschau-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
-        ("Sportschau Event 3", "http://sportschau-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
-        ("Sportschau Event 4", "http://sportschau-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
-        ("Sportschau Event 5", "http://sportschau-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
-        ("Sportschau Event 6", "http://sportschau-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
-        ("Sportschau Event 7", "http://sportschau-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
-        ("Sportschau Event 8", "http://sportschau-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
-        ("Sportschau Event 9", "http://sportschau-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
-        ("Sportschau Event 10", "http://sportschau-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
-        ("Sportschau Event 11", "http://sportschau-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
-        ("Sportschau Event 12", "http://sportschau-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
-        ("Sportschau Event 13", "http://sportschau-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
-        ("Sportschau Event 13+", "http://sportschau-event.ard-mcdn.de/sportschau/event13-ma/hls/de/master.m3u8"),
-    ]),
-    ("WDR Spezial", [
-        ("WDR Spezial 1", "https://wdrspezial.akamaized.net/hls/live/2012020/wdr_spezial1/index.m3u8"),
-        ("WDR Spezial 2", "https://wdrspezial.akamaized.net/hls/live/2012067/wdr_spezial2/index.m3u8"),
-        ("WDR Spezial 3", "https://wdrspezial.akamaized.net/hls/live/2012068/wdr_spezial3/index.m3u8"),
-        ("WDR Spezial 4", "https://wdrspezial.akamaized.net/hls/live/2012069/wdr_spezial4/index.m3u8"),
-        ("WDR Spezial 5", "https://wdrspezial.akamaized.net/hls/live/2012070/wdr_spezial5/index.m3u8"),
-        ("WDR Spezial 6", "https://wdrspezial.akamaized.net/hls/live/2013621/wdr_spezial6/index.m3u8"),
-        ("WDR Spezial 7", "https://wdrspezial.akamaized.net/hls/live/2013622/wdr_spezial7/index.m3u8"),
-    ]),
-    ("WDR Event", [
-        ("WDR Event 3", "https://wdrevent.akamaized.net/hls/live/2016698/wdr_msl4_wdrevent3/master.m3u8"),
-        ("WDR Event 4", "https://wdrevent.akamaized.net/hls/live/2016699/wdr_msl4_wdrevent4/master.m3u8"),
-        ("WDR Event 5", "https://wdrevent.akamaized.net/hls/live/2016700/wdr_msl4_wdrevent5/master.m3u8"),
-        ("WDR Event 7", "https://wdrevent.akamaized.net/hls/live/2020357/wdr_msl4_wdrevent7/master.m3u8"),
-        ("WDR Event 8", "https://wdrevent.akamaized.net/hls/live/2020358/wdr_msl4_wdrevent8/master.m3u8"),
-        ("WDR Event 9", "https://wdrevent.akamaized.net/hls/live/2020359/wdr_msl4_wdrevent9/master.m3u8"),
-        ("WDR Event 10", "https://wdrevent.akamaized.net/hls/live/2020360/wdr_msl4_wdrevent10/master.m3u8"),
-    ]),
-    ("ZDF sportstudio", [
-        ("ZDF sportstudio 1", "https://zdf-hls-01.akamaized.net/hls/live/2016296/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 2", "https://zdf-hls-02.akamaized.net/hls/live/2016297/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 3", "https://zdf-hls-03.akamaized.net/hls/live/2016298/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 4", "https://zdf-hls-04.akamaized.net/hls/live/2016299/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 5", "https://zdf-hls-05.akamaized.net/hls/live/2016300/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 6", "https://zdf-hls-06.akamaized.net/hls/live/2016301/de/veryhigh/master.m3u8"),
-        ("ZDF sportstudio 7", "https://zdf-hls-07.akamaized.net/hls/live/2016302/de/high/master.m3u8"),
-        ("ZDF sportstudio 8", "https://zdf-hls-08.akamaized.net/hls/live/2016303/de/high/master.m3u8"),
-        ("ZDF sportstudio 9", "https://zdf-hls-09.akamaized.net/hls/live/2016304/de/high/master.m3u8"),
-        ("ZDF sportstudio 10", "https://zdf-hls-10.akamaized.net/hls/live/2016305/de/high/master.m3u8"),
-        ("ZDF sportstudio 11", "https://zdf-hls-11.akamaized.net/hls/live/2016436/de/high/master.m3u8"),
-        ("ZDF sportstudio 12", "https://zdf-hls-12.akamaized.net/hls/live/2016495/de/high/master.m3u8"),
-        ("ZDF sportstudio 13", "https://zdf-hls-13.akamaized.net/hls/live/2016496/de/high/master.m3u8"),
-        ("ZDF sportstudio 14", "https://zdf-hls-14.akamaized.net/hls/live/2016497/de/high/master.m3u8"),
-        ("ZDF sportstudio 15", "https://zdf-hls-15.akamaized.net/hls/live/2016498/de/high/master.m3u8"),
-        ("ZDF sportstudio 16", "https://zdf-hls-16.akamaized.net/hls/live/2016499/de/high/master.m3u8"),
-        ("ZDF sportstudio 17", "https://zdf-hls-17.akamaized.net/hls/live/2016500/de/high/master.m3u8"),
-        ("ZDF sportstudio 19", "https://zdf-hls-19.akamaized.net/hls/live/2016502/de/high/master.m3u8"),
-        ("ZDF sportstudio 20", "https://zdf-hls-20.akamaized.net/hls/live/2016503/de/high/master.m3u8"),
-        ("ZDF sportstudio 21", "https://zdf-hls-21.akamaized.net/hls/live/2016504/de/high/master.m3u8"),
-        ("ZDF sportstudio 22", "https://zdf-hls-22.akamaized.net/hls/live/2016505/de/high/master.m3u8"),
-        ("ZDF sportstudio 23", "https://zdf-hls-23.akamaized.net/hls/live/2016506/de/high/master.m3u8"),
-    ]),
-    ("HR Event", [
-        ("HR Event 1", "http://hr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
-        ("HR Event 2", "http://hr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
-        ("HR Event 3", "http://hr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
-        ("HR Event 4", "http://hr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
-        ("HR Event 5", "http://hr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
-        ("HR Event 6", "http://hr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
-        ("HR Event 7", "http://hr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
-        ("HR Event 8", "http://hr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
-        ("HR Event 9", "http://hr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
-        ("HR Event 10", "http://hr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
-        ("HR Event 11", "http://hr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
-        ("HR Event 12", "http://hr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
-        ("HR Event 13", "http://hr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
-    ]),
-    ("MDR Event", [
-        ("MDR Event 1", "http://mdr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
-        ("MDR Event 2", "http://mdr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
-        ("MDR Event 3", "http://mdr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
-        ("MDR Event 4", "http://mdr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
-        ("MDR Event 5", "http://mdr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
-        ("MDR Event 6", "http://mdr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
-        ("MDR Event 7", "http://mdr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
-        ("MDR Event 8", "http://mdr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
-        ("MDR Event 9", "http://mdr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
-        ("MDR Event 10", "http://mdr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
-        ("MDR Event 11", "http://mdr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
-        ("MDR Event 12", "http://mdr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
-        ("MDR Event 13", "http://mdr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
-    ]),
-    ("MDR Event (weltweit)", [
-        ("MDR Event 1 (weltweit)", "https://mdrevent1wwhls.akamaized.net/hls/live/2025205/mdrevent1ww/master.m3u8"),
-        ("MDR Event 2 (weltweit)", "https://mdrevent2wwhls.akamaized.net/hls/live/2025367/mdrevent2ww/master.m3u8"),
-        ("MDR Event 3 (weltweit)", "https://mdrevent3wwhls.akamaized.net/hls/live/2025368/mdrevent3ww/master.m3u8"),
-        ("MDR Event 4 (weltweit)", "https://mdrevent4wwhls.akamaized.net/hls/live/2025369/mdrevent4ww/master.m3u8"),
-        ("MDR Event 5 (weltweit)", "https://mdrevent5wwhls.akamaized.net/hls/live/2025370/mdrevent5ww/master.m3u8"),
-    ]),
-    ("NDR Event", [
-        ("NDR Event 1", "https://ndrevent.akamaized.net/hls/live/2020100/ndr/event_1/master.m3u8"),
-        ("NDR Event 2", "https://ndrevent.akamaized.net/hls/live/2020101/ndr/event_1/master.m3u8"),
-        ("NDR Event 3", "https://ndrevent.akamaized.net/hls/live/2020102/ndr/event_1/master.m3u8"),
-        ("NDR Event 4", "https://ndrevent.akamaized.net/hls/live/2020103/ndr/event_1/master.m3u8"),
-        ("NDR Event 5", "https://ndrevent.akamaized.net/hls/live/2020104/ndr/event_1/master.m3u8"),
-        ("NDR Event 6", "https://ndrevent.akamaized.net/hls/live/2020105/ndr/event_1/master.m3u8"),
-        ("NDR Event 7", "https://ndrevent.akamaized.net/hls/live/2020106/ndr/event_1/master.m3u8"),
-        ("NDR Event 8", "https://ndrevent.akamaized.net/hls/live/2020107/ndr/event_1/master.m3u8"),
-        ("NDR Event 9", "https://ndrevent.akamaized.net/hls/live/2020108/ndr/event_1/master.m3u8"),
-    ]),
-    ("BR Event", [
-        ("BR Event 1", "https://brevent.akamaized.net/hls/live/2028218/event_01/master.m3u8"),
-        ("BR Event 2", "https://brevent.akamaized.net/hls/live/2028219/event_02/master.m3u8"),
-        ("BR Event 3", "https://brevent.akamaized.net/hls/live/2028220/event_03/master.m3u8"),
-        ("BR Event 4", "https://brevent.akamaized.net/hls/live/2028221/event_04/master.m3u8"),
-        ("BR Event 5", "https://brevent.akamaized.net/hls/live/2028222/event_05/master.m3u8"),
-    ]),
-    ("SWR Event", [
-        ("SWR Event 1", "https://swrevent01hls.akamaized.net/hls/live/2016766/event01/master.m3u8"),
-        ("SWR Event 2", "https://swrevent02hls.akamaized.net/hls/live/2016767/event02/master.m3u8"),
-        ("SWR Event 3", "https://swrevent03hls.akamaized.net/hls/live/2016768/event03/master.m3u8"),
-        ("SWR Event 4", "https://swrevent04hls.akamaized.net/hls/live/2016769/event04/master.m3u8"),
-    ]),
-    ("RBB Event", [
-        ("RBB Event 1", "https://rbbevent01-hls.akamaized.net/hls/live/685984/rbbevent01/master.m3u8"),
-        ("RBB Event 2", "https://rbbevent02-hls.akamaized.net/hls/live/685985/rbbevent02/master.m3u8"),
-    ]),
-    # Wie ORF III unverschluesselt (is_drm_protected=false laut offizieller ORF-API),
-    # braucht AT-IP. Anonyme Zusatzkanaele ohne festen Namen, werden fuer Sport-/
-    # Sonderuebertragungen genutzt (z.B. EM-Quali-Parallelspiele).
-    ("ORF Event", [
-        ("ORF Event 1", "https://web03.mdn.ors.at/orf/web03/qxa/manifest.m3u8"),
-        ("ORF Event 2", "https://web04.mdn.ors.at/orf/web04/qxa/manifest.m3u8"),
-        ("ORF Event 3", "https://web05.mdn.ors.at/orf/web05/qxa/manifest.m3u8"),
-    ]),
-    ("Radio Bremen", [
-        ("Radio Bremen Event 1", "https://rbhlsevent1.akamaized.net/hls/live/2027612/event1/master.m3u8"),
-        ("Radio Bremen Event 2", "https://rbhlsevent2.akamaized.net/hls/live/2027613/event2/master.m3u8"),
-    ]),
+	# (Gruppenname, [(Anzeigename, Stream-URL), ...])
+	("Arte Concert", [
+		("Arte Concert 1", "https://arteconcerthls.akamaized.net/hls/live/2025494/channel01/master.m3u8"),
+		("Arte Concert 2", "https://arteconcerthls.akamaized.net/hls/live/2025495/channel02/master.m3u8"),
+		("Arte Concert 3", "https://arteconcerthls.akamaized.net/hls/live/2025496/channel03/master.m3u8"),
+		("Arte Concert 4", "https://arteconcerthls.akamaized.net/hls/live/2025497/channel04/master.m3u8"),
+		("Arte Concert 5", "https://arteconcerthls.akamaized.net/hls/live/2025498/channel05/master.m3u8"),
+		("Arte Concert 6", "https://arteconcerthls.akamaized.net/hls/live/2025499/channel06/master.m3u8"),
+	]),
+	("ARD / Sportschau", [
+		("ARD Event 1 (weltweit)", "https://ardevent1.akamaized.net/hls/live/681511/wdr_msl4_ardevent1/master.m3u8"),
+		("ARD Event 2 (DE)", "https://ardevent2.akamaized.net/hls/live/681512/wdr_msl4_ardevent2/master.m3u8"),
+		("Sportschau Event 1", "http://sportschau-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
+		("Sportschau Event 2", "http://sportschau-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
+		("Sportschau Event 3", "http://sportschau-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
+		("Sportschau Event 4", "http://sportschau-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
+		("Sportschau Event 5", "http://sportschau-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
+		("Sportschau Event 6", "http://sportschau-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
+		("Sportschau Event 7", "http://sportschau-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
+		("Sportschau Event 8", "http://sportschau-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
+		("Sportschau Event 9", "http://sportschau-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
+		("Sportschau Event 10", "http://sportschau-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
+		("Sportschau Event 11", "http://sportschau-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
+		("Sportschau Event 12", "http://sportschau-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
+		("Sportschau Event 13", "http://sportschau-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
+		("Sportschau Event 13+", "http://sportschau-event.ard-mcdn.de/sportschau/event13-ma/hls/de/master.m3u8"),
+	]),
+	("WDR Spezial", [
+		("WDR Spezial 1", "https://wdrspezial.akamaized.net/hls/live/2012020/wdr_spezial1/index.m3u8"),
+		("WDR Spezial 2", "https://wdrspezial.akamaized.net/hls/live/2012067/wdr_spezial2/index.m3u8"),
+		("WDR Spezial 3", "https://wdrspezial.akamaized.net/hls/live/2012068/wdr_spezial3/index.m3u8"),
+		("WDR Spezial 4", "https://wdrspezial.akamaized.net/hls/live/2012069/wdr_spezial4/index.m3u8"),
+		("WDR Spezial 5", "https://wdrspezial.akamaized.net/hls/live/2012070/wdr_spezial5/index.m3u8"),
+		("WDR Spezial 6", "https://wdrspezial.akamaized.net/hls/live/2013621/wdr_spezial6/index.m3u8"),
+		("WDR Spezial 7", "https://wdrspezial.akamaized.net/hls/live/2013622/wdr_spezial7/index.m3u8"),
+	]),
+	("WDR Event", [
+		("WDR Event 1", "https://wdrevent.akamaized.net/hls/live/2016696/wdr_msl4_wdrevent1/master.m3u8"),
+		("WDR Event 2", "https://wdrevent.akamaized.net/hls/live/2016697/wdr_msl4_wdrevent2/master.m3u8"),
+		("WDR Event 3", "https://wdrevent.akamaized.net/hls/live/2016698/wdr_msl4_wdrevent3/master.m3u8"),
+		("WDR Event 4", "https://wdrevent.akamaized.net/hls/live/2016699/wdr_msl4_wdrevent4/master.m3u8"),
+		("WDR Event 5", "https://wdrevent.akamaized.net/hls/live/2016700/wdr_msl4_wdrevent5/master.m3u8"),
+		("WDR Event 6", "https://wdrevent.akamaized.net/hls/live/2016701/wdr_msl4_wdrevent6/master.m3u8"),
+		("WDR Event 7", "https://wdrevent.akamaized.net/hls/live/2020357/wdr_msl4_wdrevent7/master.m3u8"),
+		("WDR Event 8", "https://wdrevent.akamaized.net/hls/live/2020358/wdr_msl4_wdrevent8/master.m3u8"),
+		("WDR Event 9", "https://wdrevent.akamaized.net/hls/live/2020359/wdr_msl4_wdrevent9/master.m3u8"),
+		("WDR Event 10", "https://wdrevent.akamaized.net/hls/live/2020360/wdr_msl4_wdrevent10/master.m3u8"),
+	]),
+	("ZDF sportstudio", [
+		("ZDF sportstudio 1", "https://zdf-hls-01.akamaized.net/hls/live/2016296/de/veryhigh/master.m3u8"),
+		("ZDF sportstudio 2", "https://zdf-hls-02.akamaized.net/hls/live/2016297/de/veryhigh/master.m3u8"),
+		("ZDF sportstudio 3", "https://zdf-hls-03.akamaized.net/hls/live/2016298/de/veryhigh/master.m3u8"),
+		("ZDF sportstudio 4", "https://zdf-hls-04.akamaized.net/hls/live/2016299/de/veryhigh/master.m3u8"),
+		("ZDF sportstudio 5", "https://zdf-hls-05.akamaized.net/hls/live/2016300/de/veryhigh/master.m3u8"),
+		("ZDF sportstudio 6", "https://zdf-hls-06.akamaized.net/hls/live/2016301/de/veryhigh/master.m3u8"),
+		("ZDF sportstudio 7", "https://zdf-hls-07.akamaized.net/hls/live/2016302/de/high/master.m3u8"),
+		("ZDF sportstudio 8", "https://zdf-hls-08.akamaized.net/hls/live/2016303/de/high/master.m3u8"),
+		("ZDF sportstudio 9", "https://zdf-hls-09.akamaized.net/hls/live/2016304/de/high/master.m3u8"),
+		("ZDF sportstudio 10", "https://zdf-hls-10.akamaized.net/hls/live/2016305/de/high/master.m3u8"),
+		("ZDF sportstudio 11", "https://zdf-hls-11.akamaized.net/hls/live/2016436/de/high/master.m3u8"),
+		("ZDF sportstudio 12", "https://zdf-hls-12.akamaized.net/hls/live/2016495/de/high/master.m3u8"),
+		("ZDF sportstudio 13", "https://zdf-hls-13.akamaized.net/hls/live/2016496/de/high/master.m3u8"),
+		("ZDF sportstudio 14", "https://zdf-hls-14.akamaized.net/hls/live/2016497/de/high/master.m3u8"),
+		("ZDF sportstudio 15", "https://zdf-hls-15.akamaized.net/hls/live/2016498/de/high/master.m3u8"),
+		("ZDF sportstudio 16", "https://zdf-hls-16.akamaized.net/hls/live/2016499/de/high/master.m3u8"),
+		("ZDF sportstudio 17", "https://zdf-hls-17.akamaized.net/hls/live/2016500/de/high/master.m3u8"),
+		("ZDF sportstudio 19", "https://zdf-hls-19.akamaized.net/hls/live/2016502/de/high/master.m3u8"),
+		("ZDF sportstudio 20", "https://zdf-hls-20.akamaized.net/hls/live/2016503/de/high/master.m3u8"),
+		("ZDF sportstudio 21", "https://zdf-hls-21.akamaized.net/hls/live/2016504/de/high/master.m3u8"),
+		("ZDF sportstudio 22", "https://zdf-hls-22.akamaized.net/hls/live/2016505/de/high/master.m3u8"),
+		("ZDF sportstudio 23", "https://zdf-hls-23.akamaized.net/hls/live/2016506/de/high/master.m3u8"),
+	]),
+	("HR Event", [
+		("HR Event 1", "http://hr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
+		("HR Event 2", "http://hr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
+		("HR Event 3", "http://hr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
+		("HR Event 4", "http://hr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
+		("HR Event 5", "http://hr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
+		("HR Event 6", "http://hr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
+		("HR Event 7", "http://hr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
+		("HR Event 8", "http://hr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
+		("HR Event 9", "http://hr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
+		("HR Event 10", "http://hr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
+		("HR Event 11", "http://hr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
+		("HR Event 12", "http://hr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
+		("HR Event 13", "http://hr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
+	]),
+	("MDR Event", [
+		("MDR Event 1", "http://mdr-event.ard-mcdn.de/sportschau/event01/hls/de/master.m3u8"),
+		("MDR Event 2", "http://mdr-event.ard-mcdn.de/sportschau/event02/hls/de/master.m3u8"),
+		("MDR Event 3", "http://mdr-event.ard-mcdn.de/sportschau/event03/hls/de/master.m3u8"),
+		("MDR Event 4", "http://mdr-event.ard-mcdn.de/sportschau/event04/hls/de/master.m3u8"),
+		("MDR Event 5", "http://mdr-event.ard-mcdn.de/sportschau/event05/hls/de/master.m3u8"),
+		("MDR Event 6", "http://mdr-event.ard-mcdn.de/sportschau/event06/hls/de/master.m3u8"),
+		("MDR Event 7", "http://mdr-event.ard-mcdn.de/sportschau/event07/hls/de/master.m3u8"),
+		("MDR Event 8", "http://mdr-event.ard-mcdn.de/sportschau/event08/hls/de/master.m3u8"),
+		("MDR Event 9", "http://mdr-event.ard-mcdn.de/sportschau/event09/hls/de/master.m3u8"),
+		("MDR Event 10", "http://mdr-event.ard-mcdn.de/sportschau/event10/hls/de/master.m3u8"),
+		("MDR Event 11", "http://mdr-event.ard-mcdn.de/sportschau/event11/hls/de/master.m3u8"),
+		("MDR Event 12", "http://mdr-event.ard-mcdn.de/sportschau/event12/hls/de/master.m3u8"),
+		("MDR Event 13", "http://mdr-event.ard-mcdn.de/sportschau/event13/hls/de/master.m3u8"),
+	]),
+	("MDR Event (weltweit)", [
+		("MDR Event 1 (weltweit)", "https://mdrevent1wwhls.akamaized.net/hls/live/2025205/mdrevent1ww/master.m3u8"),
+		("MDR Event 2 (weltweit)", "https://mdrevent2wwhls.akamaized.net/hls/live/2025367/mdrevent2ww/master.m3u8"),
+		("MDR Event 3 (weltweit)", "https://mdrevent3wwhls.akamaized.net/hls/live/2025368/mdrevent3ww/master.m3u8"),
+		("MDR Event 4 (weltweit)", "https://mdrevent4wwhls.akamaized.net/hls/live/2025369/mdrevent4ww/master.m3u8"),
+		("MDR Event 5 (weltweit)", "https://mdrevent5wwhls.akamaized.net/hls/live/2025370/mdrevent5ww/master.m3u8"),
+	]),
+	("NDR Event", [
+		("NDR Event 1", "https://ndrevent.akamaized.net/hls/live/2020100/ndr/event_1/master.m3u8"),
+		("NDR Event 2", "https://ndrevent.akamaized.net/hls/live/2020101/ndr/event_1/master.m3u8"),
+		("NDR Event 3", "https://ndrevent.akamaized.net/hls/live/2020102/ndr/event_1/master.m3u8"),
+		("NDR Event 4", "https://ndrevent.akamaized.net/hls/live/2020103/ndr/event_1/master.m3u8"),
+		("NDR Event 5", "https://ndrevent.akamaized.net/hls/live/2020104/ndr/event_1/master.m3u8"),
+		("NDR Event 6", "https://ndrevent.akamaized.net/hls/live/2020105/ndr/event_1/master.m3u8"),
+		("NDR Event 7", "https://ndrevent.akamaized.net/hls/live/2020106/ndr/event_1/master.m3u8"),
+		("NDR Event 8", "https://ndrevent.akamaized.net/hls/live/2020107/ndr/event_1/master.m3u8"),
+		("NDR Event 9", "https://ndrevent.akamaized.net/hls/live/2020108/ndr/event_1/master.m3u8"),
+	]),
+	("BR Event", [
+		("BR Event 1", "https://brevent.akamaized.net/hls/live/2028218/event_01/master.m3u8"),
+		("BR Event 2", "https://brevent.akamaized.net/hls/live/2028219/event_02/master.m3u8"),
+		("BR Event 3", "https://brevent.akamaized.net/hls/live/2028220/event_03/master.m3u8"),
+		("BR Event 4", "https://brevent.akamaized.net/hls/live/2028221/event_04/master.m3u8"),
+		("BR Event 5", "https://brevent.akamaized.net/hls/live/2028222/event_05/master.m3u8"),
+		("BR Event 6", "https://brevent.akamaized.net/hls/live/2028223/event_06/master.m3u8"),
+	]),
+	("SWR Event", [
+		("SWR Event 1", "https://swrevent01hls.akamaized.net/hls/live/2016766/event01/master.m3u8"),
+		("SWR Event 2", "https://swrevent02hls.akamaized.net/hls/live/2016767/event02/master.m3u8"),
+		("SWR Event 3", "https://swrevent03hls.akamaized.net/hls/live/2016768/event03/master.m3u8"),
+		("SWR Event 4", "https://swrevent04hls.akamaized.net/hls/live/2016769/event04/master.m3u8"),
+		("SWR Event 5", "https://swrevent05hls.akamaized.net/hls/live/2016929/event05/master.m3u8"),
+		("SWR Event 6", "https://swrevent06hls.akamaized.net/hls/live/2016930/event06/master.m3u8"),
+		("SWR Event 7", "https://swrevent07hls.akamaized.net/hls/live/2016931/event07/master.m3u8"),
+	]),
+	("RBB Event", [
+		("RBB Event 1", "https://rbbevent01-hls.akamaized.net/hls/live/685984/rbbevent01/master.m3u8"),
+		("RBB Event 2", "https://rbbevent02-hls.akamaized.net/hls/live/685985/rbbevent02/master.m3u8"),
+		("RBB Event 3", "https://rbbevent03-hls.akamaized.net/hls/live/685986/rbbevent03/master.m3u8"),
+		("RBB Event 4", "https://rbbevent04-hls.akamaized.net/hls/live/685987/rbbevent04/master.m3u8"),
+		("RBB Event 5", "https://rbbevent05-hls.akamaized.net/hls/live/685988/rbbevent05/master.m3u8"),
+		("RBB Event 6", "https://rbbevent06-hls.akamaized.net/hls/live/685989/rbbevent06/master.m3u8"),
+		("RBB Event 7", "https://rbbevent07-hls.akamaized.net/hls/live/6859810/rbbevent07/master.m3u8"),
+	]),
+	# Wie ORF III unverschluesselt (is_drm_protected=false laut offizieller ORF-API),
+	# braucht AT-IP. Anonyme Zusatzkanaele ohne festen Namen, werden fuer Sport-/
+	# Sonderuebertragungen genutzt (z.B. EM-Quali-Parallelspiele).
+	("ORF Event", [
+		("ORF Event 1", "https://web03.mdn.ors.at/orf/web03/qxa/manifest.m3u8"),
+		("ORF Event 2", "https://web04.mdn.ors.at/orf/web04/qxa/manifest.m3u8"),
+		("ORF Event 3", "https://web05.mdn.ors.at/orf/web05/qxa/manifest.m3u8"),
+		("ORF Event 4", "https://web06.mdn.ors.at/orf/web06/qxa/manifest.m3u8"),
+	]),
+	("Radio Bremen", [
+		("Radio Bremen Event 1", "https://rbhlsevent1.akamaized.net/hls/live/2027612/event1/master.m3u8"),
+		("Radio Bremen Event 2", "https://rbhlsevent2.akamaized.net/hls/live/2027613/event2/master.m3u8"),
+	]),
 ]
 
 LIVE_STREAM_GROUPS = [
@@ -502,7 +515,7 @@ CHANNEL_MAP = {
     "ZDF Neo": "ZDFneo",
     "KiKA": "KiKA",
     "Phoenix": "PHOENIX",
-    "Radio Bremen": "Radio Bremen TV",
+    "Radio Bremen": "rbtv",
     "funk": "Funk.net",
     "ARD alpha": "ARD-alpha",
     "ONE": "ONE",
@@ -768,42 +781,49 @@ class DownloadHelper:
 downloadHelper = DownloadHelper()
 
 
-def _episode_label(title_bytes, topic_bytes=None, watched=False, season=None, episode=None):
-    """
-    Gibt einen Listeneintrag zurueck. Falls der Titel (SXX/EYY) enthaelt,
-    wird 'S12E08  <Titel ohne Tag>' vorangestellt, sonst unveraendert.
-    Optional: topic_bytes als Praefix voranstellen (z.B. fuer Direkte Treffer),
-    aber nur wenn das Topic nicht bereits im Titel enthalten ist.
-    watched=True fuegt ein '[S] ' Praefix hinzu.
-    season/episode: falls bereits als Zahlen bekannt (z.B. ZDF UHD ueber die
-    ZDF Document API, siehe [[project_zdf_uhd]]), werden diese statt der
-    Regex-Erkennung aus dem Titeltext verwendet.
-    """
-    title = _u(title_bytes)
-    if season is not None and episode is not None:
-        label = "S%02dE%02d  %s" % (int(season), int(episode), title.strip())
-    else:
-        s, e = _parse_season_episode(title)
-        if s is not None:
-            clean = sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
-            label = "S%02dE%02d  %s" % (s, e, clean)
-        else:
-            # "Folge" ist Pflicht, nicht optional: sonst matcht z.B. WDRs Titel-Konvention
-            # "Titel | 18.08.2026" faelschlich als "Folge 18" (Tag des Datums).
-            m2 = search(r'\|\s*Folge\s+(\d+)', title)
-            if m2:
-                folge = int(m2.group(1))
-                clean = sub(r'\s*\xb7.*$', '', title).strip()
-                label = "F%04d  %s" % (folge, clean)
-            else:
-                label = title
-    if topic_bytes:
-        topic = _u(topic_bytes)
-        if topic.lower() not in label.lower():
-            label = topic + ": " + label
-    if watched:
-        label = "* " + label
-    return _u(label)
+def _episode_label(title_bytes, topic_bytes=None, watched=False, season=None, episode=None, channel=None):
+	"""
+	Gibt einen Listeneintrag zurueck. Falls der Titel (SXX/EYY) enthaelt,
+	wird 'S12E08  <Titel ohne Tag>' vorangestellt, sonst unveraendert.
+	Optional: topic_bytes als Praefix voranstellen (z.B. fuer Direkte Treffer),
+	aber nur wenn das Topic nicht bereits im Titel enthalten ist.
+	watched=True fuegt ein '[S] ' Praefix hinzu.
+	season/episode: falls bereits als Zahlen bekannt (z.B. ZDF UHD ueber die
+	ZDF Document API, siehe [[project_zdf_uhd]]), werden diese statt der
+	Regex-Erkennung aus dem Titeltext verwendet.
+	"""
+	title = _u(title_bytes)
+	if season is not None and episode is not None:
+		label = "S%02dE%02d  %s" % (int(season), int(episode), title.strip())
+	else:
+		s, e = _parse_season_episode(title)
+		if s is not None:
+			clean = sub(r'\s*\(S\d+/E\d+\)', '', title).strip()
+			label = "S%02dE%02d  %s" % (s, e, clean)
+		else:
+			# "Folge" ist Pflicht, nicht optional: sonst matcht z.B. WDRs Titel-Konvention
+			# "Titel | 18.08.2026" faelschlich als "Folge 18" (Tag des Datums).
+			m2 = search(r'\|\s*Folge\s+(\d+)', title)
+			if m2:
+				folge = int(m2.group(1))
+				clean = sub(r'\s*\xb7.*$', '', title).strip()
+				label = "F%04d  %s" % (folge, clean)
+			else:
+				label = title
+	if topic_bytes:
+		topic = _u(topic_bytes)
+		if topic.lower() not in label.lower():
+			label = topic + ": " + label
+	if channel:
+		suffix = f" ({channelHelper.displayName(channel)})"
+		# Keep the sender visible in the fixed-width episode favorites list.
+		maxCore = 58 - len(suffix)
+		if maxCore > 10 and len(label) > maxCore:
+			label = f"{label[:maxCore - 1].rstrip()}…"
+		label = f"{label}{suffix}"
+	if watched:
+		label = "* " + label
+	return _u(label)
 
 
 def _sanitize_folder_name(value):
@@ -3487,6 +3507,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 		self.sort_mode = "timestamp"
 		self._sv_mode = False   # True = Sendung-verpasst?-Filter aktiv
 		self._sv_sn_items = []  # gefilterte Items des aktiven Datumsfilters
+		self.preSvSnState = None  # Normal groups before the larger date-filter fetch.
 		self._sv_sn_pending = None
 		self._fav_sort_mode = False  # True = Favoriten-Sortiermodus aktiv
 		self._fav_grabbed = None  # Index des gegriffenen Favoriten
@@ -3920,7 +3941,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 
 	# Sender mit zu wenigen Eintraegen fuer "Sendung verpasst?" / "Demnaechst" (< 50/Woche)
 	_NO_SN_SOURCES = frozenset([
-		"Radio Bremen", "funk", "DW", "ZDF Info", "ZDF Neo",
+		"funk", "DW", "ZDF Info", "ZDF Neo",
 		"KiKA", "tagesschau24", "ORF", "SRF",
 	])
 
@@ -4061,6 +4082,8 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 			_log("SV/SN Prefetch Fehler: " + self._fetch_error)
 			self["status_label"].setText("Fehler beim Laden!")
 			return
+		if self.preSvSnState is None:
+			self.preSvSnState = (self.all_items, self.groups)
 		self.all_items = self._fetch_result
 		self.groups = _build_groups(self.all_items, self.sort_mode)
 		self.groups_filtered = list(self.groups)
@@ -4106,6 +4129,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 
 	def _on_sv_date_chosen(self, date_str):
 		if not date_str:
+			self._sv_reset()
 			return
 		try:
 			import time as _time
@@ -4163,6 +4187,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 
 	def _on_sn_date_chosen(self, date_str):
 		if not date_str:
+			self._sv_reset()
 			return
 		try:
 			import time as _time
@@ -4191,6 +4216,9 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 		"""SV/SN-Filter aufheben — zurück zur vollständigen Gruppenansicht."""
 		self._sv_mode = False
 		self._sn_mode = False
+		if self.preSvSnState is not None:
+			self.all_items, self.groups = self.preSvSnState
+			self.preSvSnState = None
 		self.groups_filtered = _relevance_sort(self.groups, self.current_search)
 		self._show_groups()
 
@@ -4486,6 +4514,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 			# eine echte, nicht zurueckgezogene Teil-Seite sein (leere Zeilen
 			# statt Ueberlappung mit der vorherigen Seite), siehe _list_step().
 			self._list_scroll = max(0, self._list_scroll)
+		groupOffset = self._sv_sn_offset() if not self.current_search else 0
 		for i in range(_LIST_ROWS):
 			abs_idx = self._list_scroll + i
 			if abs_idx < total:
@@ -4503,7 +4532,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 							pass
 					self["list_dot_%d" % i].show()
 					item = item[2:]
-				elif self.mode == MODE_GROUPS and is_favorite(_b(item)):
+				elif self.mode == MODE_GROUPS and is_favorite(channelHelper.favoriteGroupKey(item, self.getGroupChannel(abs_idx - groupOffset))):
 					if self._fav_pix:
 						try:
 							self["list_dot_%d" % i].instance.setPixmap(self._fav_pix)
@@ -5164,6 +5193,13 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 		_log("Alpha Deep-Fetch beendet: %d Gruppen" % len(self.groups_filtered))
 		self._show_groups()
 
+	def getGroupChannel(self, groupIndex):
+		if 0 <= groupIndex < len(self.groups_filtered):
+			items = self.groups_filtered[groupIndex][1]
+			if items:
+				return _u(items[0].get("channel"))
+		return ""
+
 	def toggle_favorite(self):
 		try:
 			idx = self._get_list_index()
@@ -5189,8 +5225,9 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 			if gitems:
 				channel = gitems[0].get("channel", "") or ""
 
-			if is_favorite(gname):
-				remove_favorite(gname)
+			favoriteKey = channelHelper.favoriteGroupKey(gname, channel)
+			if is_favorite(favoriteKey):
+				remove_favorite(favoriteKey)
 				self._show_toast("Favorit entfernt", added=False)
 				# In der Favoriten-Ansicht den Eintrag sofort aus der Liste entfernen
 				if self.source_name == "Meine Favoriten":
@@ -5203,7 +5240,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 						new_pos = min(real_idx, new_len - 1)
 						self._list_focus(new_pos)
 			else:
-				add_favorite(gname, channel)
+				add_favorite(favoriteKey, channel)
 				self._show_toast("Favorit hinzugefügt!", added=True)
 			self._update_red_hint()
 			self._update_blue_hint()
@@ -5317,7 +5354,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 					if _u(gname).startswith(">> "):
 						self["hint_blue"].setText(_b(""))
 						return
-					if is_favorite(gname):
+					if is_favorite(channelHelper.favoriteGroupKey(gname, self.getGroupChannel(real_idx))):
 						self["hint_blue"].setText(_b("Favorit löschen"))
 						return
 		except Exception:
@@ -5560,7 +5597,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 			toggle_watched(url)
 			is_direct_hits = _u(self.cur_group_name).startswith(">> Direkte Treffer")
 			show_group = is_direct_hits or self.source_name == "Meine Favoriten"
-			self._list_items = [_episode_label(i["title"], i.get("group") if show_group else None, watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes]
+			self._list_items = [_episode_label(x["title"], x.get("group") if show_group else None, watched=is_watched(x.get("stream_url_hd") or x.get("stream_url_sd") or ""), season=x.get("season"), episode=x.get("episode"), channel=x.get("channel") if self._fav_show_episodes else None) for x in self.cur_episodes]
 			self._list_focus(idx)
 			self._update_info_hint()
 		except Exception:
@@ -5580,7 +5617,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 				self._show_toast(_b("Favorit entfernt"), added=False)
 				if self.source_name == "Meine Favoriten" and self._fav_show_episodes:
 					self.cur_episodes = [i for i in self.cur_episodes if (i.get("stream_url_hd") or i.get("stream_url_sd") or "") != url]
-					self._list_items = [_episode_label(i["title"], i.get("group"), watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in self.cur_episodes]
+					self._list_items = self._ep_fav_list_entries()
 					self["status_label"].setText(_b("%d Einzelfolgen" % len(self.cur_episodes)))
 					new_idx = min(idx, len(self.cur_episodes) - 1)
 					if new_idx >= 0:
@@ -5629,11 +5666,11 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 		# fehlte der Stern beim ersten Anzeigen komplett.
 		self.cur_episodes = items
 		self.mode = MODE_EPISODES
-		self._set_list([_episode_label(i["title"], i.get("group"), watched=is_watched(i.get("stream_url_hd") or i.get("stream_url_sd") or ""), season=i.get("season"), episode=i.get("episode")) for i in items])
-		self.last_index = -1
 		self._ep_fav_sort_mode = False
 		self._ep_fav_grabbed = None
 		self._ep_fav_order_backup = None
+		self._set_list(self._ep_fav_list_entries())
+		self.last_index = -1
 		self._ep_fav_update_hints()
 		self._update_info_hint()
 
@@ -5678,7 +5715,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 	def _ep_fav_list_entries(self):
 		entries = []
 		for i, item in enumerate(self.cur_episodes):
-			label = _episode_label(item["title"], item.get("group"), watched=is_watched(item.get("stream_url_hd") or item.get("stream_url_sd") or ""), season=item.get("season"), episode=item.get("episode"))
+			label = _episode_label(item["title"], item.get("group"), watched=is_watched(item.get("stream_url_hd") or item.get("stream_url_sd") or ""), season=item.get("season"), episode=item.get("episode"), channel=item.get("channel"))
 			if i == self._ep_fav_grabbed:
 				label = _b("» ") + label
 			entries.append(label)
@@ -5944,324 +5981,326 @@ class OeMediathekDirBrowser(LcdIconSummaryMixin, _CustomListMixin, Screen):
 
 class OeMediathekZdfUhdScreen(LcdIconSummaryMixin, _CustomListMixin, Screen):
 
-    _CL_ROWS = _LIST_ROWS
+	_CL_ROWS = _LIST_ROWS
 
-    @staticmethod
-    def _make_skin():
-        if IS_FHD:
-            lx, ly0, lw, rh, rf = 40, 150, 1820, 58, 34
-            label_off = 80
-            dw, dh, dx_off, dy_off = 28, 24, 12, 17
-        else:
-            lx, ly0, lw, rh, rf = 36, 97, 1194, 38, 22
-            label_off = 54
-            dw, dh, dx_off, dy_off = 18, 16, 8, 11
-        list_xml = ""
-        for i in range(_LIST_ROWS):
-            y = ly0 + i * rh
-            list_xml += (
-                '<widget name="list_sel_{i}" position="{x},{y}" size="{w},{rh}" '
-                'backgroundColor="#00253850" zPosition="1" transparent="0"/>'
-                '<widget name="list_dot_{i}" position="{dx},{dy}" size="{dw},{dh}" '
-                'alphatest="blend" scale="1" zPosition="3" transparent="1"/>'
-                '<widget name="list_label_{i}" position="{lbx},{y}" size="{lbw},{rh}" '
-                'zPosition="2" font="Regular;{rf}" halign="left" valign="center" '
-                'foregroundColor="#CCCCCC" backgroundColor="#33000000" transparent="1" noWrap="1"/>'
-            ).format(i=i, x=lx, y=y, w=lw,
-                     dx=lx + dx_off, dy=y + dy_off, dw=dw, dh=dh,
-                     lbx=lx + label_off, lbw=lw - label_off, rh=rh, rf=rf)
+	@staticmethod
+	def _make_skin():
+		if IS_FHD:
+			lx, ly0, lw, rh, rf = 40, 150, 1820, 58, 34
+			label_off = 80
+			dw, dh, dx_off, dy_off = 28, 24, 12, 17
+		else:
+			lx, ly0, lw, rh, rf = 36, 97, 1194, 38, 22
+			label_off = 54
+			dw, dh, dx_off, dy_off = 18, 16, 8, 11
+		list_xml = ""
+		for i in range(_LIST_ROWS):
+			y = ly0 + i * rh
+			list_xml += (
+				'<widget name="list_sel_{i}" position="{x},{y}" size="{w},{rh}" '
+				'backgroundColor="#00253850" zPosition="1" transparent="0"/>'
+				'<widget name="list_dot_{i}" position="{dx},{dy}" size="{dw},{dh}" '
+				'alphatest="blend" scale="1" zPosition="3" transparent="1"/>'
+				'<widget name="list_label_{i}" position="{lbx},{y}" size="{lbw},{rh}" '
+				'zPosition="2" font="Regular;{rf}" halign="left" valign="center" '
+				'foregroundColor="#CCCCCC" backgroundColor="#33000000" transparent="1" noWrap="1"/>'
+			).format(
+				i=i, x=lx, y=y, w=lw,
+				dx=lx + dx_off, dy=y + dy_off, dw=dw, dh=dh,
+				lbx=lx + label_off, lbw=lw - label_off, rh=rh, rf=rf,
+			)
 
-        if IS_FHD:
-            return (
-                '<screen name="OeMediathekZdfUhdScreen" position="0,0" size="1920,1080" flags="wfNoBorder">'
-                '<eLabel position="0,0" size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>'
-                '<eLabel position="30,30" size="1860,80" backgroundColor="#33000000" zPosition="-5"/>'
-                '<widget name="title_label" position="50,30" size="850,80" font="Regular;42" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
-                '<widget name="status_label" position="910,30" size="920,80" font="Regular;28" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
-                '<eLabel position="30,140" size="1860,790" backgroundColor="#33000000" zPosition="-5"/>'
-                + list_xml +
-                '<widget name="scrollbar_track" position="1866,150" size="6,754" backgroundColor="#1AFFFFFF" zPosition="1"/>'
-                '<widget name="scrollbar_thumb" position="1866,150" size="6,58" backgroundColor="#00253850" zPosition="2"/>'
-                '<eLabel position="30,960" size="1860,100" backgroundColor="#1A000000" zPosition="-5"/>'
-                '<eLabel position="50,980" size="8,60" backgroundColor="#1AEE0000" zPosition="2"/>'
-                '<widget name="hint_red" position="68,960" size="330,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="417,980" size="8,60" backgroundColor="#1A00AA00" zPosition="2"/>'
-                '<widget name="hint_green" position="435,960" size="260,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="810,980" size="8,60" backgroundColor="#1A0000AA" zPosition="2"/>'
-                '<widget name="hint_blue" position="828,960" size="230,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_page" position="1698,960" size="172,100" font="Regular;32" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
-                '</screen>'
-            )
-        else:
-            return (
-                '<screen name="OeMediathekZdfUhdScreen" position="0,0" size="1280,720" flags="wfNoBorder">'
-                '<eLabel position="0,0" size="1280,720" backgroundColor="#66000000" zPosition="-6"/>'
-                '<eLabel position="30,20" size="1220,53" backgroundColor="#33000000" zPosition="-5"/>'
-                '<widget name="title_label" position="43,20" size="560,53" font="Regular;28" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
-                '<widget name="status_label" position="610,20" size="610,53" font="Regular;18" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
-                '<eLabel position="30,90" size="1220,525" backgroundColor="#33000000" zPosition="-5"/>'
-                + list_xml +
-                '<widget name="scrollbar_track" position="1234,97" size="4,494" backgroundColor="#1AFFFFFF" zPosition="1"/>'
-                '<widget name="scrollbar_thumb" position="1234,97" size="4,38" backgroundColor="#00253850" zPosition="2"/>'
-                '<eLabel position="30,634" size="1220,60" backgroundColor="#1A000000" zPosition="-5"/>'
-                '<eLabel position="33,649" size="5,30" backgroundColor="#1AEE0000" zPosition="2"/>'
-                '<widget name="hint_red" position="42,634" size="220,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="270,649" size="5,30" backgroundColor="#1A00AA00" zPosition="2"/>'
-                '<widget name="hint_green" position="279,634" size="175,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<eLabel position="462,649" size="5,30" backgroundColor="#1A0000AA" zPosition="2"/>'
-                '<widget name="hint_blue" position="471,634" size="155,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
-                '<widget name="hint_page" position="1132,634" size="118,60" font="Regular;21" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
-                '</screen>'
-            )
+		if IS_FHD:
+			return (
+				'<screen name="OeMediathekZdfUhdScreen" position="0,0" size="1920,1080" flags="wfNoBorder">'
+				'<eLabel position="0,0" size="1920,1080" backgroundColor="#66000000" zPosition="-6"/>'
+				'<eLabel position="30,30" size="1860,80" backgroundColor="#33000000" zPosition="-5"/>'
+				'<widget name="title_label" position="50,30" size="850,80" font="Regular;42" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
+				'<widget name="status_label" position="910,30" size="920,80" font="Regular;28" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
+				'<eLabel position="30,140" size="1860,790" backgroundColor="#33000000" zPosition="-5"/>'
+				+ list_xml +
+				'<widget name="scrollbar_track" position="1866,150" size="6,754" backgroundColor="#1AFFFFFF" zPosition="1"/>'
+				'<widget name="scrollbar_thumb" position="1866,150" size="6,58" backgroundColor="#00253850" zPosition="2"/>'
+				'<eLabel position="30,960" size="1860,100" backgroundColor="#1A000000" zPosition="-5"/>'
+				'<eLabel position="50,980" size="8,60" backgroundColor="#1AEE0000" zPosition="2"/>'
+				'<widget name="hint_red" position="68,960" size="330,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="417,980" size="8,60" backgroundColor="#1A00AA00" zPosition="2"/>'
+				'<widget name="hint_green" position="435,960" size="260,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="810,980" size="8,60" backgroundColor="#1A0000AA" zPosition="2"/>'
+				'<widget name="hint_blue" position="828,960" size="230,100" font="Regular;32" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_page" position="1698,960" size="172,100" font="Regular;32" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
+				'</screen>'
+			)
+		else:
+			return (
+				'<screen name="OeMediathekZdfUhdScreen" position="0,0" size="1280,720" flags="wfNoBorder">'
+				'<eLabel position="0,0" size="1280,720" backgroundColor="#66000000" zPosition="-6"/>'
+				'<eLabel position="30,20" size="1220,53" backgroundColor="#33000000" zPosition="-5"/>'
+				'<widget name="title_label" position="43,20" size="560,53" font="Regular;28" halign="left" valign="center" foregroundColor="#E0E0E0" backgroundColor="#33000000" transparent="1"/>'
+				'<widget name="status_label" position="610,20" size="610,53" font="Regular;18" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#33000000" transparent="1"/>'
+				'<eLabel position="30,90" size="1220,525" backgroundColor="#33000000" zPosition="-5"/>'
+				+ list_xml +
+				'<widget name="scrollbar_track" position="1234,97" size="4,494" backgroundColor="#1AFFFFFF" zPosition="1"/>'
+				'<widget name="scrollbar_thumb" position="1234,97" size="4,38" backgroundColor="#00253850" zPosition="2"/>'
+				'<eLabel position="30,634" size="1220,60" backgroundColor="#1A000000" zPosition="-5"/>'
+				'<eLabel position="33,649" size="5,30" backgroundColor="#1AEE0000" zPosition="2"/>'
+				'<widget name="hint_red" position="42,634" size="220,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="270,649" size="5,30" backgroundColor="#1A00AA00" zPosition="2"/>'
+				'<widget name="hint_green" position="279,634" size="175,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<eLabel position="462,649" size="5,30" backgroundColor="#1A0000AA" zPosition="2"/>'
+				'<widget name="hint_blue" position="471,634" size="155,60" font="Regular;21" halign="left" valign="center" foregroundColor="#CCCCCC" backgroundColor="#1A000000" transparent="1"/>'
+				'<widget name="hint_page" position="1132,634" size="118,60" font="Regular;21" halign="right" valign="center" foregroundColor="#888888" backgroundColor="#1A000000" transparent="1"/>'
+				'</screen>'
+			)
 
-    def __init__(self, session):
-        self.skin = self._make_skin()
-        Screen.__init__(self, session)
-        self._sb_x = 1866 if IS_FHD else 1234
-        self._sb_y0 = 150 if IS_FHD else 97
-        self._sb_rh = 58 if IS_FHD else 38
-        self._cl_init()
-        self.session = session
-        self._shows = []
+	def __init__(self, session):
+		self.skin = self._make_skin()
+		Screen.__init__(self, session)
+		self._sb_x = 1866 if IS_FHD else 1234
+		self._sb_y0 = 150 if IS_FHD else 97
+		self._sb_rh = 58 if IS_FHD else 38
+		self._cl_init()
+		self.session = session
+		self._shows = []
 
-        self._updating = False
-        self._sort_az = False
-        self._shows_orig = []
-        self._dot_pix = None
+		self._updating = False
+		self._sort_az = False
+		self._shows_orig = []
+		self._dot_pix = None
 
-        for i in range(_LIST_ROWS):
-            try:
-                self["list_dot_%d" % i] = _Pixmap() if _Pixmap else Label(_b(""))
-            except Exception:
-                self["list_dot_%d" % i] = Label(_b(""))
-            self["list_dot_%d" % i].hide()
+		for i in range(_LIST_ROWS):
+			try:
+				self["list_dot_%d" % i] = _Pixmap() if _Pixmap else Label(_b(""))
+			except Exception:
+				self["list_dot_%d" % i] = Label(_b(""))
+			self["list_dot_%d" % i].hide()
 
-        self["title_label"] = Label(_b("ZDF UHD"))
-        self["status_label"] = Label(_b("Lade..."))
-        self["hint_red"] = Label(_b("Aktualisieren"))
-        self["hint_green"] = Label(_b("A-Z"))
-        self["hint_blue"] = Label(_b("Favorit"))
-        self["hint_page"] = Label(_b(""))
+		self["title_label"] = Label(_b("ZDF UHD"))
+		self["status_label"] = Label(_b("Lade..."))
+		self["hint_red"] = Label(_b("Aktualisieren"))
+		self["hint_green"] = Label(_b("A-Z"))
+		self["hint_blue"] = Label(_b("Favorit"))
+		self["hint_page"] = Label(_b(""))
 
-        self.onShow.append(self.__on_show)
+		self.onShow.append(self.__on_show)
 
-        self["actions"] = ActionMap(
-            ["OkCancelActions", "ColorActions", "DirectionActions", "ListboxActions"],
-            {
-                "ok": self.key_ok,
-                "cancel": self.key_cancel,
-                "red": self.key_refresh,
-                "green": self.key_sort_az,
-                "blue": self.key_blue,
-                "up": self.key_up,
-                "down": self.key_down,
-                "upRepeated": self.key_up,
-                "downRepeated": self.key_down,
-                "left": self.key_page_up,
-                "right": self.key_page_down,
-                "pageUp": self.key_page_up,
-                "pageDown": self.key_page_down,
-            },
-            -1,
-        )
+		self["actions"] = ActionMap(
+			["OkCancelActions", "ColorActions", "DirectionActions", "ListboxActions"],
+			{
+				"ok": self.key_ok,
+				"cancel": self.key_cancel,
+				"red": self.key_refresh,
+				"green": self.key_sort_az,
+				"blue": self.key_blue,
+				"up": self.key_up,
+				"down": self.key_down,
+				"upRepeated": self.key_up,
+				"downRepeated": self.key_down,
+				"left": self.key_page_up,
+				"right": self.key_page_down,
+				"pageUp": self.key_page_up,
+				"pageDown": self.key_page_down,
+			},
+			-1,
+		)
 
-        t = Thread(target=self._fetch)
-        t.daemon = True
-        t.start()
+		t = Thread(target=self._fetch)
+		t.daemon = True
+		t.start()
 
-    def _fetch(self):
-        try:
-            shows = get_zdf_uhd_shows()
-        except Exception as e:
-            from twisted.internet import reactor
-            reactor.callFromThread(self._on_shows, [], str(e))
-            return
-        try:
-            # GraphQL-Einträge ohne verifizierten HDR-Stream herausfiltern
-            no_hdr = set(get_zdf_uhd_no_hdr_topics())
-            shows = [s for s in shows if s.get("title", "") not in no_hdr]
-            # Statische Topics ergänzen (nur die, die nicht schon in GraphQL-Liste sind)
-            dyn_titles = set(s.get("title", "") for s in shows)
-            for topic in get_zdf_uhd_static_topics():
-                if topic not in dyn_titles:
-                    shows.append({"title": topic, "static": True})
-        except Exception:
-            pass
-        from twisted.internet import reactor
-        reactor.callFromThread(self._on_shows, shows, None)
+	def _fetch(self):
+		try:
+			shows = get_zdf_uhd_shows()
+		except Exception as e:
+			from twisted.internet import reactor
+			reactor.callFromThread(self._on_shows, [], str(e))
+			return
+		try:
+			# GraphQL-Einträge ohne verifizierten HDR-Stream herausfiltern
+			no_hdr = set(get_zdf_uhd_no_hdr_topics())
+			shows = [s for s in shows if s.get("title", "") not in no_hdr]
+			# Statische Topics ergänzen (nur die, die nicht schon in GraphQL-Liste sind)
+			dyn_titles = set(s.get("title", "") for s in shows)
+			for topic in get_zdf_uhd_static_topics():
+				if topic not in dyn_titles:
+					shows.append({"title": topic, "static": True})
+		except Exception:
+			pass
+		from twisted.internet import reactor
+		reactor.callFromThread(self._on_shows, shows, None)
 
-    def _show_label(self, show):
-        """Ergaenzt die lokal bekannte Qualitaet ohne zusaetzlichen Netzwerkabruf."""
-        title = _u(show.get("title", ""))
-        quality = get_zdf_uhd_topic_quality(title)
-        return title + "  [" + quality + "]" if quality else title
+	def _show_label(self, show):
+		"""Ergaenzt die lokal bekannte Qualitaet ohne zusaetzlichen Netzwerkabruf."""
+		title = _u(show.get("title", ""))
+		quality = get_zdf_uhd_topic_quality(title)
+		return title + "  [" + quality + "]" if quality else title
 
-    def _on_shows(self, shows, err):
-        self._shows = shows
-        self._shows_orig = list(shows)
-        self._sort_az = False
-        self["hint_green"].setText(_b("A-Z"))
-        if err:
-            self["status_label"].setText(_b("Fehler beim Laden"))
-            _log("ZDF UHD Ladefehler: " + str(err))
-        else:
-            n = len(shows)
-            self["status_label"].setText(_b(str(n) + " Sendung" + ("en" if n != 1 else "")))
-            self._set_list([self._show_label(s) for s in shows])
-            self._update_hint_page()
-        self._update_dots()
+	def _on_shows(self, shows, err):
+		self._shows = shows
+		self._shows_orig = list(shows)
+		self._sort_az = False
+		self["hint_green"].setText(_b("A-Z"))
+		if err:
+			self["status_label"].setText(_b("Fehler beim Laden"))
+			_log("ZDF UHD Ladefehler: " + str(err))
+		else:
+			n = len(shows)
+			self["status_label"].setText(_b(str(n) + " Sendung" + ("en" if n != 1 else "")))
+			self._set_list([self._show_label(s) for s in shows])
+			self._update_hint_page()
+		self._update_dots()
 
-    def _update_hint_page(self):
-        total = len(self._list_items)
-        if total > _LIST_ROWS:
-            self["hint_page"].setText(_b("%d/%d" % (self._list_sel + 1, total)))
-        else:
-            self["hint_page"].setText(_b(""))
-        self._update_hint_blue()
+	def _update_hint_page(self):
+		total = len(self._list_items)
+		if total > _LIST_ROWS:
+			self["hint_page"].setText(_b("%d/%d" % (self._list_sel + 1, total)))
+		else:
+			self["hint_page"].setText(_b(""))
+		self._update_hint_blue()
 
-    def _update_hint_blue(self):
-        idx = self._get_list_index()
-        if idx is None or not self._shows or idx >= len(self._shows):
-            self["hint_blue"].setText(_b("Favorit"))
-            return
-        title = self._shows[idx].get("title", "")
-        if is_favorite(_b(title)):
-            self["hint_blue"].setText(_b("Favorit löschen"))
-        else:
-            self["hint_blue"].setText(_b("Favorit"))
+	def _update_hint_blue(self):
+		idx = self._get_list_index()
+		if idx is None or not self._shows or idx >= len(self._shows):
+			self["hint_blue"].setText(_b("Favorit"))
+			return
+		title = self._shows[idx].get("title", "")
+		if is_favorite(channelHelper.favoriteGroupKey(title, "ZDF UHD")):
+			self["hint_blue"].setText(_b("Favorit löschen"))
+		else:
+			self["hint_blue"].setText(_b("Favorit"))
 
-    def __on_show(self):
-        if self._dot_pix is None and _Pixmap and _LoadPixmap:
-            try:
-                import os as _os
-                _path = _os.path.join(_os.path.dirname(__file__), "bookmark.png")
-                self._dot_pix = _LoadPixmap(_path)
-                if self._dot_pix:
-                    for i in range(_LIST_ROWS):
-                        try:
-                            self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
-                        except Exception:
-                            pass
-            except Exception as e:
-                _log("ZDF UHD bookmark.png load failed: " + str(e))
-        self._update_dots()
+	def __on_show(self):
+		if self._dot_pix is None and _Pixmap and _LoadPixmap:
+			try:
+				import os as _os
+				_path = _os.path.join(_os.path.dirname(__file__), "bookmark.png")
+				self._dot_pix = _LoadPixmap(_path)
+				if self._dot_pix:
+					for i in range(_LIST_ROWS):
+						try:
+							self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
+						except Exception:
+							pass
+			except Exception as e:
+				_log("ZDF UHD bookmark.png load failed: " + str(e))
+		self._update_dots()
 
-    def _update_dots(self):
-        scroll = self._list_scroll
-        total = len(self._list_items)
-        for i in range(_LIST_ROWS):
-            abs_idx = scroll + i
-            if abs_idx >= total or not self._shows or abs_idx >= len(self._shows):
-                self["list_dot_%d" % i].hide()
-                continue
-            title = self._shows[abs_idx].get("title", "")
-            if is_favorite(_b(title)):
-                if self._dot_pix:
-                    try:
-                        self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
-                    except Exception:
-                        pass
-                self["list_dot_%d" % i].show()
-            else:
-                self["list_dot_%d" % i].hide()
-        self._update_hint_blue()
+	def _update_dots(self):
+		scroll = self._list_scroll
+		total = len(self._list_items)
+		for i in range(_LIST_ROWS):
+			abs_idx = scroll + i
+			if abs_idx >= total or not self._shows or abs_idx >= len(self._shows):
+				self["list_dot_%d" % i].hide()
+				continue
+			title = self._shows[abs_idx].get("title", "")
+			if is_favorite(channelHelper.favoriteGroupKey(title, "ZDF UHD")):
+				if self._dot_pix:
+					try:
+						self["list_dot_%d" % i].instance.setPixmap(self._dot_pix)
+					except Exception:
+						pass
+				self["list_dot_%d" % i].show()
+			else:
+				self["list_dot_%d" % i].hide()
+		self._update_hint_blue()
 
-    def key_up(self):
-        self._list_step(-1)
-        self._update_hint_page()
-        self._update_dots()
+	def key_up(self):
+		self._list_step(-1)
+		self._update_hint_page()
+		self._update_dots()
 
-    def key_down(self):
-        self._list_step(1)
-        self._update_hint_page()
-        self._update_dots()
+	def key_down(self):
+		self._list_step(1)
+		self._update_hint_page()
+		self._update_dots()
 
-    def key_page_up(self):
-        self._list_page(-1)
-        self._update_hint_page()
-        self._update_dots()
+	def key_page_up(self):
+		self._list_page(-1)
+		self._update_hint_page()
+		self._update_dots()
 
-    def key_page_down(self):
-        self._list_page(1)
-        self._update_hint_page()
-        self._update_dots()
+	def key_page_down(self):
+		self._list_page(1)
+		self._update_hint_page()
+		self._update_dots()
 
-    def key_ok(self):
-        idx = self._get_list_index()
-        if idx is None or idx >= len(self._shows):
-            return
-        show = self._shows[idx]
-        title = show.get("title", "")
-        # Statische Liste bevorzugen (verifizierte UHD-Folgen); MVW nur wenn keine statischen Einträge
-        _, _, static_count = get_zdf_uhd_static_episodes(title)
-        is_static = static_count > 0 or show.get("static")
-        if is_static:
-            def _loader(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp", _t=title):
-                return get_zdf_uhd_static_episodes(_t, search_term)
-        else:
-            def _loader(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp", _t=title):
-                return get_zdf_uhd_topic_episodes(_t, offset, size, search_term, min_duration, sort_by)
-        self.session.open(OeMediathekScreen, "ZDF UHD", _loader, force_uhd=True, zdf_uhd_static=bool(is_static))
+	def key_ok(self):
+		idx = self._get_list_index()
+		if idx is None or idx >= len(self._shows):
+			return
+		show = self._shows[idx]
+		title = show.get("title", "")
+		# Statische Liste bevorzugen (verifizierte UHD-Folgen); MVW nur wenn keine statischen Einträge
+		_, _, static_count = get_zdf_uhd_static_episodes(title)
+		is_static = static_count > 0 or show.get("static")
+		if is_static:
+			def _loader(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp", _t=title):
+				return get_zdf_uhd_static_episodes(_t, search_term)
+		else:
+			def _loader(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp", _t=title):
+				return get_zdf_uhd_topic_episodes(_t, offset, size, search_term, min_duration, sort_by)
+		self.session.open(OeMediathekScreen, "ZDF UHD", _loader, force_uhd=True, zdf_uhd_static=bool(is_static))
 
-    def key_refresh(self):
-        if self._updating:
-            return
-        self._updating = True
-        self["actions"].setEnabled(False)
-        self["hint_red"].setText(_b("Aktualisiere..."))
-        self["status_label"].setText(_b("Aktualisiere UHD-Liste..."))
-        t = Thread(target=self._do_refresh)
-        t.daemon = True
-        t.start()
+	def key_refresh(self):
+		if self._updating:
+			return
+		self._updating = True
+		self["actions"].setEnabled(False)
+		self["hint_red"].setText(_b("Aktualisiere..."))
+		self["status_label"].setText(_b("Aktualisiere UHD-Liste..."))
+		t = Thread(target=self._do_refresh)
+		t.daemon = True
+		t.start()
 
-    def _do_refresh(self):
-        count, err = refresh_uhd_static()
-        from twisted.internet import reactor
-        reactor.callFromThread(self._on_refresh_done, count, err)
+	def _do_refresh(self):
+		count, err = refresh_uhd_static()
+		from twisted.internet import reactor
+		reactor.callFromThread(self._on_refresh_done, count, err)
 
-    def _on_refresh_done(self, count, err):
-        self._updating = False
-        try:
-            self["actions"].setEnabled(True)
-            self["hint_red"].setText(_b("Aktualisieren"))
-            if err:
-                self["status_label"].setText(_b("Fehler: " + str(err)[:40]))
-            else:
-                self["status_label"].setText(_b("%d Einträge aktualisiert" % count))
-                t = Thread(target=self._fetch)
-                t.daemon = True
-                t.start()
-        except Exception:
-            pass
+	def _on_refresh_done(self, count, err):
+		self._updating = False
+		try:
+			self["actions"].setEnabled(True)
+			self["hint_red"].setText(_b("Aktualisieren"))
+			if err:
+				self["status_label"].setText(_b("Fehler: " + str(err)[:40]))
+			else:
+				self["status_label"].setText(_b("%d Einträge aktualisiert" % count))
+				t = Thread(target=self._fetch)
+				t.daemon = True
+				t.start()
+		except Exception:
+			pass
 
-    def key_sort_az(self):
-        if not self._shows_orig:
-            return
-        self._sort_az = not self._sort_az
-        if self._sort_az:
-            self._shows = sorted(self._shows_orig, key=lambda s: s.get("title", "").lower())
-            self["hint_green"].setText(_b("Original"))
-        else:
-            self._shows = list(self._shows_orig)
-            self["hint_green"].setText(_b("A-Z"))
-        self._set_list([self._show_label(s) for s in self._shows])
-        self._update_hint_page()
-        self._update_dots()
+	def key_sort_az(self):
+		if not self._shows_orig:
+			return
+		self._sort_az = not self._sort_az
+		if self._sort_az:
+			self._shows = sorted(self._shows_orig, key=lambda s: s.get("title", "").lower())
+			self["hint_green"].setText(_b("Original"))
+		else:
+			self._shows = list(self._shows_orig)
+			self["hint_green"].setText(_b("A-Z"))
+		self._set_list([self._show_label(s) for s in self._shows])
+		self._update_hint_page()
+		self._update_dots()
 
-    def key_blue(self):
-        idx = self._get_list_index()
-        if idx is None or not self._shows or idx >= len(self._shows):
-            return
-        title = self._shows[idx].get("title", "")
-        title_b = _b(title)
-        if is_favorite(title_b):
-            remove_favorite(title_b)
-        else:
-            add_favorite(title_b, "ZDF UHD")
-        self._update_dots()
+	def key_blue(self):
+		idx = self._get_list_index()
+		if idx is None or not self._shows or idx >= len(self._shows):
+			return
+		title = self._shows[idx].get("title", "")
+		favoriteKey = channelHelper.favoriteGroupKey(title, "ZDF UHD")
+		if is_favorite(favoriteKey):
+			remove_favorite(favoriteKey)
+		else:
+			add_favorite(favoriteKey, "ZDF UHD")
+		self._update_dots()
 
-    def key_cancel(self):
-        self.close()
+	def key_cancel(self):
+		self.close()
 
 
 # --------------------------------------------------------------------------

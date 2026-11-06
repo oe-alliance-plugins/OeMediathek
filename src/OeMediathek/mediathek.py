@@ -4,11 +4,13 @@
 
 import io
 import json
+from json import load
 import os
+from os.path import exists
 import re as _re
 import threading
 import time
-from urllib.request import urlopen, Request
+from urllib.request import Request, urlopen
 
 LOG_FILE = "/tmp/OeMediathek/oemediathek.log"
 FAVORITES_FILE = "/etc/enigma2/oemediathek_favorites.json"
@@ -28,8 +30,35 @@ except ImportError:
 _KNOWN_CHANNELS = {
     "ARD", "ZDF", "ARTE", "3Sat", "NDR", "WDR", "BR", "MDR", "HR", "SWR",
     "RBB", "SR", "ZDFinfo", "ZDFneo", "KiKA", "PHOENIX",
-    "Radio Bremen TV", "Funk.net", "ARD-alpha", "ONE", "tagesschau24", "DW",
+    "Radio Bremen TV", "rbtv", "Radio Bremen", "Funk.net", "ARD-alpha", "ONE", "tagesschau24", "DW",
 }
+
+
+class ChannelHelper:
+	DISPLAY_NAMES = {"rbtv": "Radio Bremen"}
+
+	def displayName(self, channel):
+		channel = _s(channel)
+		return self.DISPLAY_NAMES.get(channel, channel)
+
+	def favoriteGroupKey(self, group, channel):
+		"""Use sender and title as identity, accepting text and legacy byte strings."""
+		group = _s(group)
+		channel = _s(channel)
+		if not channel:
+			return group
+		prefix = f"{self.displayName(channel)}: "
+		if group.startswith(prefix):
+			return group
+		# Normalize existing raw API prefixes without prefixing the title twice.
+		rawPrefix = f"{channel}: "
+		if group.startswith(rawPrefix):
+			group = group[len(rawPrefix):]
+		return f"{prefix}{group}"
+
+
+channelHelper = ChannelHelper()
+
 
 # Generische Film/Doku-Container: topic ist nur ein Genre-Label, Titel direkt als Gruppe nutzen.
 _FILM_TOPICS = {
@@ -179,184 +208,184 @@ def _dedupe_by_url(items):
 # POST https://mediathekviewweb.de/api/query
 # ------------------------------------------------------------------
 def _mvw_query(channel=None, size=100, offset=0, search_term=None, min_duration=0, sort_by="timestamp", search_fields=None, topic_filter=None):
-    """
-    Fragt die MediathekViewWeb-API ab.
-    search_fields: Liste der Felder fuer die Suche, Standard ["title", "topic"]
-    sort_by: "timestamp" | "duration" | "topic" (alle API-seitig)
-    topic_filter: schraenkt Suche auf exaktes topic ein (zusaetzliche Query-Bedingung)
-    """
-    url = "https://mediathekviewweb.de/api/query"
+	"""
+	Fragt die MediathekViewWeb-API ab.
+	search_fields: Liste der Felder fuer die Suche, Standard ["title", "topic"]
+	sort_by: "timestamp" | "duration" | "topic" (alle API-seitig)
+	topic_filter: schraenkt Suche auf exaktes topic ein (zusaetzliche Query-Bedingung)
+	"""
+	url = "https://mediathekviewweb.de/api/query"
 
-    queries = []
-    if channel:
-        queries.append({"fields": ["channel"], "query": channel})
+	queries = []
+	if channel:
+		queries.append({"fields": ["channel"], "query": channel})
 
-    if topic_filter:
-        queries.append({"fields": ["topic"], "query": topic_filter})
+	if topic_filter:
+		queries.append({"fields": ["topic"], "query": topic_filter})
 
-    if search_term:
-        fields = search_fields if search_fields else ["title", "topic"]
-        queries.append({"fields": fields, "query": search_term})
+	if search_term:
+		fields = search_fields if search_fields else ["title", "topic"]
+		queries.append({"fields": fields, "query": search_term})
 
-    if sort_by in ("topic", "title"):
-        api_sort, sort_order = sort_by, "asc"
-    elif sort_by in ("timestamp", "duration"):
-        api_sort, sort_order = sort_by, "desc"
-    else:
-        api_sort, sort_order = "timestamp", "desc"
+	if sort_by in ("topic", "title"):
+		api_sort, sort_order = sort_by, "asc"
+	elif sort_by in ("timestamp", "duration"):
+		api_sort, sort_order = sort_by, "desc"
+	else:
+		api_sort, sort_order = "timestamp", "desc"
 
-    body_dict = {
-        "queries": queries,
-        "sortBy": api_sort,
-        "sortOrder": sort_order,
-        "future": True,
-        "offset": offset,
-        "size": size,
-    }
-    if min_duration > 0:
-        body_dict["duration_min"] = min_duration
+	body_dict = {
+		"queries": queries,
+		"sortBy": api_sort,
+		"sortOrder": sort_order,
+		"future": True,
+		"offset": offset,
+		"size": size,
+	}
+	if min_duration > 0:
+		body_dict["duration_min"] = min_duration
 
-    body = json.dumps(body_dict)
+	body = json.dumps(body_dict)
 
-    if isinstance(body, str):
-        body = body.encode("utf-8")
+	if isinstance(body, str):
+		body = body.encode("utf-8")
 
-    req = Request(url, data=body)
-    req.add_header("Content-Type", "application/json")
+	req = Request(url, data=body)
+	req.add_header("Content-Type", "application/json")
 
-    _log("MVW Abruf channel=%s offset=%d size=%d search=%s" % (channel, offset, size, search_term))
-    try:
-        resp = urlopen(req, timeout=15, context=_ssl_context) if _ssl_context else urlopen(req, timeout=15)
-        try:
-            _log("MVW HTTP %s" % resp.getcode())
-            payload = _decode_bytes(resp.read()).lstrip("﻿")
-            data = json.loads(payload)
-        finally:
-            try:
-                resp.close()
-            except Exception:
-                pass
-    except Exception as e:
-        _log("MVW Fehler: " + str(e))
-        raise
+	_log("MVW Abruf channel=%s offset=%d size=%d search=%s" % (channel, offset, size, search_term))
+	try:
+		resp = urlopen(req, timeout=15, context=_ssl_context) if _ssl_context else urlopen(req, timeout=15)
+		try:
+			_log("MVW HTTP %s" % resp.getcode())
+			payload = _decode_bytes(resp.read()).lstrip("﻿")
+			data = json.loads(payload)
+		finally:
+			try:
+				resp.close()
+			except Exception:
+				pass
+	except Exception as e:
+		_log("MVW Fehler: " + str(e))
+		raise
 
-    results_raw = data.get("result", {}).get("results", [])
-    total_results = data.get("result", {}).get("queryInfo", {}).get("totalResults", 0)
-    try:
-        total_results = int(total_results)
-    except Exception:
-        total_results = 0
-    raw_count = len(results_raw)
-    _log("MVW %d Ergebnisse (gesamt: %d)" % (raw_count, total_results))
+	results_raw = data.get("result", {}).get("results", [])
+	total_results = data.get("result", {}).get("queryInfo", {}).get("totalResults", 0)
+	try:
+		total_results = int(total_results)
+	except Exception:
+		total_results = 0
+	raw_count = len(results_raw)
+	_log("MVW %d Ergebnisse (gesamt: %d)" % (raw_count, total_results))
 
-    # Sender die in DE nicht verfuegbar sind ausblenden (nur bei "Alle Mediatheken").
-    # Hinweis: Die API hat keinen Exclude-Parameter. Wenn eine Seite viele geblockte
-    # Eintraege enthaelt, kann die zurueckgegebene Liste kuerzer als "size" sein.
-    # Das ist ein bekanntes, akzeptiertes Verhalten ohne saubere Gegenmassnahme.
-    blocked = {"ORF", "SRF"} if not channel else set()
+	# Sender die in DE nicht verfuegbar sind ausblenden (nur bei "Alle Mediatheken").
+	# Hinweis: Die API hat keinen Exclude-Parameter. Wenn eine Seite viele geblockte
+	# Eintraege enthaelt, kann die zurueckgegebene Liste kuerzer als "size" sein.
+	# Das ist ein bekanntes, akzeptiertes Verhalten ohne saubere Gegenmassnahme.
+	blocked = {"ORF", "SRF"} if not channel else set()
 
-    items = []
-    for entry in results_raw:
-        ch = _s(entry.get("channel", ""))
-        topic = _s(entry.get("topic", ""))
-        title = _s(entry.get("title", ""))
-        timestamp = entry.get("timestamp", 0)
+	items = []
+	for entry in results_raw:
+		ch = _s(entry.get("channel", ""))
+		topic = _s(entry.get("topic", ""))
+		title = _s(entry.get("title", ""))
+		timestamp = entry.get("timestamp", 0)
 
-        if ch in blocked:
-            continue
+		if ch in blocked:
+			continue
 
-        # Arte: nur deutschsprachige Inhalte (ARTE.DE) behalten.
-        # Die API liefert auch ARTE.FR, ARTE.IT etc. bei channel="ARTE"-Abfragen.
-        if ch.upper().startswith("ARTE") and ch.upper() != "ARTE.DE":
-            continue
+		# Arte: nur deutschsprachige Inhalte (ARTE.DE) behalten.
+		# Die API liefert auch ARTE.FR, ARTE.IT etc. bei channel="ARTE"-Abfragen.
+		if ch.upper().startswith("ARTE") and ch.upper() != "ARTE.DE":
+			continue
 
-        # MVW-Channel-Suche ist eine Textsuche, kein Exact-Match: "ARD" matcht auch
-        # "ARD-alpha", "ZDF" matcht auch "ZDFneo"/"ZDF-tivi", "SR" matcht auch "SRF".
-        # Fuer eigene Sender-Kacheln (channel-Filter gesetzt) nur exakte Treffer
-        # behalten, sonst landen Sendungen anderer, eigenstaendiger Kacheln zusaetzlich
-        # in der falschen Kachel (z.B. RESPEKT/ARD-alpha in "ARD Mediathek").
-        if channel and ch.upper() != channel.upper() and not (channel.upper() == "ARTE" and ch.upper() == "ARTE.DE"):
-            continue
+		# MVW-Channel-Suche ist eine Textsuche, kein Exact-Match: "ARD" matcht auch
+		# "ARD-alpha", "ZDF" matcht auch "ZDFneo"/"ZDF-tivi", "SR" matcht auch "SRF".
+		# Fuer eigene Sender-Kacheln (channel-Filter gesetzt) nur exakte Treffer
+		# behalten, sonst landen Sendungen anderer, eigenstaendiger Kacheln zusaetzlich
+		# in der falschen Kachel (z.B. RESPEKT/ARD-alpha in "ARD Mediathek").
+		if channel and ch.upper() != channel.upper() and not (channel.upper() == "ARTE" and ch.upper() == "ARTE.DE"):
+			continue
 
-        # HD und SD getrennt auslesen
-        # ORF: Q8C (HD) seit 2026-06 auf "video_not_available"-Tafel umgeleitet — kein HD anbieten
-        url_hd = "" if ch.upper() == "ORF" else _valid_stream_url(entry.get("url_video_hd") or "")
-        url_sd = _valid_stream_url(entry.get("url_video") or "")
+		# HD und SD getrennt auslesen
+		# ORF: Q8C (HD) seit 2026-06 auf "video_not_available"-Tafel umgeleitet — kein HD anbieten
+		url_hd = "" if ch.upper() == "ORF" else _valid_stream_url(entry.get("url_video_hd") or "")
+		url_sd = _valid_stream_url(entry.get("url_video") or "")
 
-        desc = _s(entry.get("description", ""))
-        duration = entry.get("duration", 0)
+		desc = _s(entry.get("description", ""))
+		duration = entry.get("duration", 0)
 
-        # API kuerzt Beschreibungen mit "\n....." — nur das API-Artefakt entfernen,
-        # echte Satzpunkte aber in Ruhe lassen.
-        if desc:
-            desc = desc.rstrip()
-            # "\n....." am Ende ist ein API-Kuerzel fuer abgeschnittenen Text
-            while desc.endswith("\n.") or desc.endswith("\n..") or desc.endswith("\n...") \
-                    or desc.endswith("\n....") or desc.endswith("\n....."):
-                desc = desc.rsplit("\n", 1)[0].rstrip()
-            if len(_s(entry.get("description", ""))) >= 400:
-                desc = desc + " ..."
+		# API kuerzt Beschreibungen mit "\n....." — nur das API-Artefakt entfernen,
+		# echte Satzpunkte aber in Ruhe lassen.
+		if desc:
+			desc = desc.rstrip()
+			# "\n....." am Ende ist ein API-Kuerzel fuer abgeschnittenen Text
+			while desc.endswith("\n.") or desc.endswith("\n..") or desc.endswith("\n...") or desc.endswith("\n....") or desc.endswith("\n....."):
+				desc = desc.rsplit("\n", 1)[0].rstrip()
+			if len(_s(entry.get("description", ""))) >= 400:
+				desc = desc + " ..."
 
-        # Überspringen, wenn gar kein Stream vorhanden ist
-        if not title or (not url_hd and not url_sd):
-            continue
+		# Überspringen, wenn gar kein Stream vorhanden ist
+		if not title or (not url_hd and not url_sd):
+			continue
 
-        # Audiodeskriptions- und Gebaerdensprach-Fassungen ausblenden
-        if title.endswith("(Audiodeskription)") or title.endswith("(Gebärdensprache)") or title.endswith("(ÖGS)"):
-            continue
+		# Audiodeskriptions- und Gebaerdensprach-Fassungen ausblenden
+		if title.endswith("(Audiodeskription)") or title.endswith("(Gebärdensprache)") or title.endswith("(ÖGS)"):
+			continue
 
-        try:
-            duration = int(duration)
-        except Exception:
-            duration = 0
+		try:
+			duration = int(duration)
+		except Exception:
+			duration = 0
 
-        if duration > 0:
-            m, s = divmod(duration, 60)
-            h, m = divmod(m, 60)
-            if h > 0:
-                duration_str = "%d:%02d Std." % (h, m)
-            else:
-                duration_str = "%d Min." % m
-        else:
-            duration_str = "Unbekannt"
+		if duration > 0:
+			m, s = divmod(duration, 60)
+			h, m = divmod(m, 60)
+			if h > 0:
+				duration_str = "%d:%02d Std." % (h, m)
+			else:
+				duration_str = "%d Min." % m
+		else:
+			duration_str = "Unbekannt"
 
-        if not desc:
-            desc = "Keine Beschreibung verfügbar."
+		if not desc:
+			desc = "Keine Beschreibung verfügbar."
 
-        # Generische Film-Container aufbrechen: topic ist ein Sammelbehaelter
-        # (z.B. "Filme", "Spielfilm") → Filmtitel direkt als Gruppenname verwenden.
-        topic_lower = topic.lower() if topic else ""
-        is_film_container = topic_lower in _FILM_TOPICS
+		# Generische Film-Container aufbrechen: topic ist ein Sammelbehaelter
+		# (z.B. "Filme", "Spielfilm") → Filmtitel direkt als Gruppenname verwenden.
+		topic_lower = topic.lower() if topic else ""
+		is_film_container = topic_lower in _FILM_TOPICS
 
-        if is_film_container:
-            group_key = title if channel else ch + ": " + title
-        elif topic and topic != title:
-            group_key = topic if channel else ch + ": " + topic
-        else:
-            group_key = title if channel else ch + ": " + title
+		channelDisplay = channelHelper.displayName(ch)
+		if is_film_container:
+			groupKey = title if channel else f"{channelDisplay}: {title}"
+		elif topic and topic != title:
+			groupKey = topic if channel else f"{channelDisplay}: {topic}"
+		else:
+			groupKey = title if channel else f"{channelDisplay}: {title}"
 
-        _log("URL [%s] HD=%s SD=%s" % (ch, url_hd if url_hd else "-", url_sd if url_sd else "-"))
-        try:
-            ts = int(timestamp)
-        except Exception:
-            ts = 0
+		_log("URL [%s] HD=%s SD=%s" % (ch, url_hd if url_hd else "-", url_sd if url_sd else "-"))
+		try:
+			ts = int(timestamp)
+		except Exception:
+			ts = 0
 
-        items.append({
-            "title": _s(title),
-            "group": _s(group_key),
-            "channel": _s(ch),
-            "stream_url_hd": _s(url_hd),
-            "stream_url_sd": _s(url_sd),
-            "description": _s(desc),
-            "duration": _s(duration_str),
-            "timestamp": ts,
-            "url_website": _s(entry.get("url_website") or ""),
-        })
+		items.append({
+			"title": _s(title),
+			"group": _s(groupKey),
+			"channel": _s(ch),
+			"stream_url_hd": _s(url_hd),
+			"stream_url_sd": _s(url_sd),
+			"description": _s(desc),
+			"duration": _s(duration_str),
+			"timestamp": ts,
+			"url_website": _s(entry.get("url_website") or ""),
+		})
 
-    items = _dedupe_by_url(items)
+	items = _dedupe_by_url(items)
 
-    _log("MVW %d Sendungen verarbeitet" % len(items))
-    return items, total_results, raw_count
+	_log("MVW %d Sendungen verarbeitet" % len(items))
+	return items, total_results, raw_count
 
 
 # ------------------------------------------------------------------
@@ -458,7 +487,8 @@ def get_phoenix_highlights(offset=0, size=100, search_term=None, min_duration=0,
 
 
 def get_radio_bremen_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
-    return _mvw_query("Radio Bremen TV", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
+	# Current Radio Bremen entries use the API channel rbtv.
+	return _mvw_query("rbtv", size=size, offset=offset, search_term=search_term, min_duration=min_duration, sort_by=sort_by)
 
 
 def get_funk_highlights(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
@@ -501,19 +531,27 @@ _SV_SN_NAMES = {">> Sendung verpasst?", ">> Demn\u00e4chst"}
 
 
 def _load_favorites_raw():
-    try:
-        if os.path.exists(FAVORITES_FILE):
-            with io.open(FAVORITES_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    # Sondereintraege (SV/SN) bereinigen falls versehentlich gespeichert
-                    cleaned = [e for e in data if e.get("group") not in _SV_SN_NAMES]
-                    if len(cleaned) != len(data):
-                        save_favorites(cleaned)
-                    return cleaned
-    except Exception:
-        pass
-    return []
+	try:
+		if exists(FAVORITES_FILE):
+			with open(FAVORITES_FILE, "r", encoding="utf-8") as stream:
+				data = load(stream)
+				if isinstance(data, list):
+					# Sondereintraege (SV/SN) bereinigen falls versehentlich gespeichert
+					cleaned = [x for x in data if x.get("group") not in _SV_SN_NAMES]
+					changed = len(cleaned) != len(data)
+					# Upgrade old title-only favorites once, retaining their order.
+					for entry in cleaned:
+						group = entry.get("group", "")
+						favoriteKey = channelHelper.favoriteGroupKey(group, entry.get("channel"))
+						if favoriteKey != group:
+							entry["group"] = favoriteKey
+							changed = True
+					if changed:
+						save_favorites(cleaned)
+					return cleaned
+	except Exception:
+		pass
+	return []
 
 
 def save_favorites(favorites_raw):
@@ -669,98 +707,100 @@ def get_episode_favorites():
 
 
 def get_favorites(offset=0, size=100, search_term=None, min_duration=0, sort_by="timestamp"):
-    """
-    Laedt alle Favoriten-Gruppen frisch aus der API.
-    Nutzt die serverseitige Suche, um alle Folgen einer Serie zuverlaessig zu finden.
-    """
-    favs = _load_favorites_raw()
-    if not favs:
-        return [], 0, 0
+	"""
+	Laedt alle Favoriten-Gruppen frisch aus der API.
+	Nutzt die serverseitige Suche, um alle Folgen einer Serie zuverlaessig zu finden.
+	"""
+	favs = _load_favorites_raw()
+	if not favs:
+		return [], 0, 0
 
-    results = [None] * len(favs)
-    _sem = threading.Semaphore(3)
+	results = [None] * len(favs)
+	_sem = threading.Semaphore(3)
 
-    def _fetch_one(idx, fav):
-        channel = fav.get("channel") or None
-        group = fav.get("group", "")
+	def _fetch_one(idx, fav):
+		channel = fav.get("channel") or None
+		group = fav.get("group", "")
 
-        # Den reinen Sendungsnamen extrahieren fuer die API Suche.
-        # Nur entfernen wenn der Teil vor ": " wirklich ein bekannter Sendername ist —
-        # sonst wuerde z.B. "Tatort: Borowski..." faelschlich zu "Borowski..." gekuerzt.
-        pure_topic = group
-        if channel and group.startswith(channel + ": "):
-            pure_topic = group[len(channel) + 2:]
-        elif ": " in group:
-            prefix = group.split(": ", 1)[0]
-            if prefix in _KNOWN_CHANNELS:
-                pure_topic = group.split(": ", 1)[1]
+		# Den reinen Sendungsnamen extrahieren fuer die API Suche.
+		# Nur entfernen wenn der Teil vor ": " wirklich ein bekannter Sendername ist —
+		# sonst wuerde z.B. "Tatort: Borowski..." faelschlich zu "Borowski..." gekuerzt.
+		pure_topic = group
+		if channel and group.startswith(channel + ": "):
+			pure_topic = group[len(channel) + 2:]
+		elif ": " in group:
+			prefix = group.split(": ", 1)[0]
+			if prefix in _KNOWN_CHANNELS:
+				pure_topic = group.split(": ", 1)[1]
 
-        # ZDF UHD Topics: Statische Liste verwenden statt MVW
-        if channel == "ZDF UHD":
-            items, _, _ = get_zdf_uhd_static_episodes(pure_topic)
-            results[idx] = items
-            return
+		# ZDF UHD Topics: Statische Liste verwenden statt MVW
+		if channel == "ZDF UHD":
+			items, _, _ = get_zdf_uhd_static_episodes(pure_topic)
+			for item in items:
+				item["group"] = _s(group)
+			results[idx] = items
+			return
 
-        matched = []
-        with _sem:
-            try:
-                # Hole gezielt bis zu 100 Folgen genau dieser Serie.
-                # ["title", "topic"] statt nur ["topic"], damit Film-Favoriten gefunden
-                # werden: bei Film-Containern (topic="Spielfilm" o.ae.) ist der
-                # group_key der Filmtitel, der nur im title-Feld der API steht.
-                # Das lokale Exakt-Filter (item_group_str == group) verhindert Fehlzuordnungen.
-                items, _, _rc = _mvw_query(
-                    channel=channel,
-                    size=100,
-                    offset=0,
-                    search_term=pure_topic,
-                    min_duration=min_duration,
-                    sort_by=sort_by,
-                    search_fields=["title", "topic"],
-                )
-                # Lokal auf die exakte Gruppe filtern, um unscharfen Beifang auszublenden.
-                # Vergleich normalisiert: "BR: Schnittgut" gespeichert von "Alle" passt auch
-                # auf group_key "Schnittgut" aus der channel-spezifischen Abfrage.
-                for item in items:
-                    item_group = item.get("group", "")
-                    item_group_str = _s(item_group)
-                    # Direkte Übereinstimmung
-                    if item_group_str == group:
-                        matched.append(item)
-                        continue
-                    # Fallback: gespeicherte Gruppe hat Sender-Prefix, item_group nicht
-                    # z.B. group="BR: Schnittgut", item_group_str="Schnittgut"
-                    if ": " in group:
-                        group_suffix = group.split(": ", 1)[1]
-                        if item_group_str == group_suffix:
-                            # group-Feld auf den gespeicherten Namen normalisieren,
-                            # damit is_favorite(gname) in der Favoriten-Ansicht korrekt matcht
-                            item = dict(item)
-                            item["group"] = group
-                            matched.append(item)
-            except Exception as e:
-                _log("Favorit laden Fehler (%s): %s" % (group, str(e)))
-        results[idx] = matched
+		matched = []
+		with _sem:
+			try:
+				# Hole gezielt bis zu 100 Folgen genau dieser Serie.
+				# ["title", "topic"] statt nur ["topic"], damit Film-Favoriten gefunden
+				# werden: bei Film-Containern (topic="Spielfilm" o.ae.) ist der
+				# group_key der Filmtitel, der nur im title-Feld der API steht.
+				# Das lokale Exakt-Filter (item_group_str == group) verhindert Fehlzuordnungen.
+				items, _, _rc = _mvw_query(
+					channel=channel,
+					size=100,
+					offset=0,
+					search_term=pure_topic,
+					min_duration=min_duration,
+					sort_by=sort_by,
+					search_fields=["title", "topic"],
+				)
+				# Lokal auf die exakte Gruppe filtern, um unscharfen Beifang auszublenden.
+				# Vergleich normalisiert: "BR: Schnittgut" gespeichert von "Alle" passt auch
+				# auf group_key "Schnittgut" aus der channel-spezifischen Abfrage.
+				for item in items:
+					item_group = item.get("group", "")
+					item_group_str = _s(item_group)
+					# Direkte Übereinstimmung
+					if item_group_str == group:
+						matched.append(item)
+						continue
+					# Fallback: gespeicherte Gruppe hat Sender-Prefix, item_group nicht
+					# z.B. group="BR: Schnittgut", item_group_str="Schnittgut"
+					if ": " in group:
+						group_suffix = group.split(": ", 1)[1]
+						if item_group_str == group_suffix:
+							# group-Feld auf den gespeicherten Namen normalisieren,
+							# damit is_favorite(gname) in der Favoriten-Ansicht korrekt matcht
+							item = dict(item)
+							item["group"] = group
+							matched.append(item)
+			except Exception as e:
+				_log("Favorit laden Fehler (%s): %s" % (group, str(e)))
+		results[idx] = matched
 
-    threads = [threading.Thread(target=_fetch_one, args=(i, fav)) for i, fav in enumerate(favs)]
-    for t in threads:
-        t.daemon = True
-        t.start()
-    deadline = time.time() + 60
-    for t in threads:
-        remaining = deadline - time.time()
-        if remaining > 0:
-            t.join(timeout=remaining)
+	threads = [threading.Thread(target=_fetch_one, args=(i, fav)) for i, fav in enumerate(favs)]
+	for t in threads:
+		t.daemon = True
+		t.start()
+	deadline = time.time() + 60
+	for t in threads:
+		remaining = deadline - time.time()
+		if remaining > 0:
+			t.join(timeout=remaining)
 
-    all_items = []
-    for r in results:
-        if r:
-            all_items.extend(r)
+	all_items = []
+	for r in results:
+		if r:
+			all_items.extend(r)
 
-    # Kein Paging ueber alle Favoriten-Items — jede Gruppe hat bereits max. 100 Eintraege,
-    # und die Gesamtzahl bleibt ueberschaubar. offset/size gelten nur fuer den API-Abruf
-    # pro Gruppe (dort unveraendert), nicht fuer die zusammengefuehrte Ergebnisliste.
-    return all_items, len(all_items), len(all_items)
+	# Kein Paging ueber alle Favoriten-Items — jede Gruppe hat bereits max. 100 Eintraege,
+	# und die Gesamtzahl bleibt ueberschaubar. offset/size gelten nur fuer den API-Abruf
+	# pro Gruppe (dort unveraendert), nicht fuer die zusammengefuehrte Ergebnisliste.
+	return all_items, len(all_items), len(all_items)
 
 
 # ------------------------------------------------------------------
