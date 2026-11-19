@@ -12,7 +12,7 @@ from urllib.parse import urlparse as _urlparse
 from urllib.request import Request, urlopen
 from twisted.internet import reactor
 
-from enigma import ePoint, eServiceReference, eSize, eTimer, getDesktop
+from enigma import eEPGCache, ePoint, eServiceReference, eSize, eTimer, getDesktop
 
 from Components.ActionMap import ActionMap
 from Components.Label import Label
@@ -885,77 +885,78 @@ def _relevance_sort(groups, search_term):
 
 
 def _inject_direct_hits(groups, search_term):
-    """
-    Fuegt bei aktiver Suche eine Gruppe "Direkte Treffer" ganz oben ein.
-    Darin landen alle Episoden, deren Titel den Suchbegriff enthaelt,
-    aber deren topic (Gruppenname) ihn NICHT enthaelt.
-    So werden Filmtitel gefunden, auch wenn das topic nichts mit dem
-    gesuchten Begriff zu tun hat.
-    """
-    if not search_term:
-        return groups
-    try:
-        term = search_term.lower()
-    except Exception:
-        return groups
+	"""
+	Fuegt bei aktiver Suche eine Gruppe "Direkte Treffer" ganz oben ein.
+	Darin landen alle Episoden, deren Titel den Suchbegriff enthaelt,
+	aber deren topic (Gruppenname) ihn NICHT enthaelt.
+	So werden Filmtitel gefunden, auch wenn das topic nichts mit dem
+	gesuchten Begriff zu tun hat.
+	"""
+	if not search_term:
+		return groups
+	try:
+		term = _u(search_term).lower()
+	except Exception:
+		return groups
 
-    terms = term.split()
-    if not terms:
-        return groups
+	# Ignore punctuation-only words, e.g. the ampersand in Law & Order.
+	terms = [x for x in term.split() if any(map(str.isalnum, x))]
+	if not terms:
+		return groups
 
-    direct = []
-    for key, episodes in groups:
-        group_name = _u(key).lower()
-        if all(w in group_name for w in terms):
-            # Topic enthaelt alle Woerter bereits -> normale Gruppe genuegt
-            continue
-        for ep in episodes:
-            t = ep.get("title", "")
-            title_str = _u(t).lower()
-            if all(w in (group_name + " " + title_str) for w in terms):
-                direct.append(ep)
+	direct = []
+	for key, episodes in groups:
+		group_name = _u(key).lower()
+		if all(w in group_name for w in terms):
+			# Topic enthaelt alle Woerter bereits -> normale Gruppe genuegt
+			continue
+		for ep in episodes:
+			t = ep.get("title", "")
+			title_str = _u(t).lower()
+			if all(w in (group_name + " " + title_str) for w in terms):
+				direct.append(ep)
 
-    if not direct:
-        return groups
+	if not direct:
+		return groups
 
-    # Relevanz-Sortierung: exakter Substring zuerst, dann Einzelwoerter, innerhalb gleicher Stufe nach Datum
-    def _relevance_key(ep):
-        t = ep.get("title", "")
-        title_str = _u(t).lower()
-        exact = 0 if term in title_str else 1
-        ts = ep.get("timestamp", 0)
-        try:
-            ts = int(ts)
-        except Exception:
-            ts = 0
-        return (exact, -ts)
+	# Relevanz-Sortierung: exakter Substring zuerst, dann Einzelwoerter, innerhalb gleicher Stufe nach Datum
+	def _relevance_key(ep):
+		t = ep.get("title", "")
+		title_str = _u(t).lower()
+		exact = 0 if term in title_str else 1
+		ts = ep.get("timestamp", 0)
+		try:
+			ts = int(ts)
+		except Exception:
+			ts = 0
+		return (exact, -ts)
 
-    direct.sort(key=_relevance_key)
+	direct.sort(key=_relevance_key)
 
-    # Duplikate entfernen: nur URL-Pfad vergleichen (Hostname ignorieren, da CDN-Varianten existieren)
-    # Nach der Sortierung, damit der relevantere Eintrag gewinnt
-    seen_url_paths = set()
-    deduped = []
-    for ep in direct:
-        url = ep.get("stream_url_sd") or ep.get("stream_url_hd") or ""
-        try:
-            url_str = _u(url)
-        except Exception:
-            url_str = str(url)
-        # Pfad ab dem ersten "/" nach "://" extrahieren
-        try:
-            path_key = url_str.split("://", 1)[1].split("/", 1)[1] if "://" in url_str else url_str
-        except Exception:
-            path_key = url_str
-        if path_key and path_key in seen_url_paths:
-            continue
-        if path_key:
-            seen_url_paths.add(path_key)
-        deduped.append(ep)
-    direct = deduped
+	# Duplikate entfernen: nur URL-Pfad vergleichen (Hostname ignorieren, da CDN-Varianten existieren)
+	# Nach der Sortierung, damit der relevantere Eintrag gewinnt
+	seen_url_paths = set()
+	deduped = []
+	for ep in direct:
+		url = ep.get("stream_url_sd") or ep.get("stream_url_hd") or ""
+		try:
+			url_str = _u(url)
+		except Exception:
+			url_str = str(url)
+		# Pfad ab dem ersten "/" nach "://" extrahieren
+		try:
+			path_key = url_str.split("://", 1)[1].split("/", 1)[1] if "://" in url_str else url_str
+		except Exception:
+			path_key = url_str
+		if path_key and path_key in seen_url_paths:
+			continue
+		if path_key:
+			seen_url_paths.add(path_key)
+		deduped.append(ep)
+	direct = deduped
 
-    label = ">> Direkte Treffer (%d)" % len(direct)
-    return [(label, direct)] + list(groups)
+	label = ">> Direkte Treffer (%d)" % len(direct)
+	return [(label, direct)] + list(groups)
 
 
 def _build_groups(items, sort_mode="timestamp", flat=False):
@@ -3480,7 +3481,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 				'</screen>'
 			)
 
-	def __init__(self, session, source_name, loader, force_uhd=False, zdf_uhd_static=False):
+	def __init__(self, session, source_name, loader, force_uhd=False, zdf_uhd_static=False, initialSearch=None):
 		self.skin = self._make_skin()
 		_log("ContentScreen init: " + source_name)
 		Screen.__init__(self, session)
@@ -3502,7 +3503,7 @@ class OeMediathekScreen(LcdIconSummaryMixin, Screen):
 		self.ep_total = 0
 		self.ep_has_more = False
 
-		self.current_search = None
+		self.current_search = _u(initialSearch) if initialSearch else None
 		self.min_duration = 0
 		self.sort_mode = "timestamp"
 		self._sv_mode = False   # True = Sendung-verpasst?-Filter aktiv
@@ -6592,11 +6593,126 @@ def main(session, **kwargs):
     session.open(OeMediathekMainScreen)
 
 
+class EventInfoHelper:
+	def resolveRunningShow(self, session):
+		"""Read the current EPG title, falling back to the playing service."""
+		try:
+			serviceRef = session.nav.getCurrentlyPlayingServiceReference()
+			if serviceRef is None:
+				return None
+			title = None
+			try:
+				event = eEPGCache.getInstance().lookupEventTime(serviceRef, -1, 0)
+				if event is not None:
+					title = event.getEventName()
+			except Exception:
+				pass
+			if not title:
+				try:
+					service = session.nav.getCurrentService()
+					info = service.info() if service else None
+					event = info.getEvent(0) if info else None
+					if event is not None:
+						title = event.getEventName()
+				except Exception:
+					pass
+			return title
+		except Exception:
+			_log(f"resolveRunningShow: {_fmt_exc()}")
+			return None
+
+	def resolveUpcomingShows(self, session, windowMinutes=10080):
+		"""Return upcoming EPG entries on the current channel for the next seven days."""
+		try:
+			serviceRef = session.nav.getCurrentlyPlayingServiceReference()
+			if serviceRef is None:
+				return []
+			now = int(time())
+			events = eEPGCache.getInstance().lookupEvent(["ITBD", (serviceRef.toString(), 0, -1, windowMinutes)]) or []
+			choices = []
+			for event in events:
+				try:
+					title, begin = _u(event[1]), event[2]
+					if not title or begin is None or begin <= now:
+						continue
+				except (IndexError, TypeError, ValueError):
+					continue
+				try:
+					label = f"{strftime('%d.%m. %H:%M', localtime(begin))}  {title}"
+				except (OverflowError, OSError, TypeError, ValueError):
+					label = title
+				choices.append((label, title))
+			return choices
+		except Exception:
+			_log(f"resolveUpcomingShows: {_fmt_exc()}")
+			return []
+
+	def openMain(self, session):
+		try:
+			main(session)
+		except Exception:
+			_log(f"EventInfo fallback: {_fmt_exc()}")
+
+	def openSearch(self, session, title):
+		"""Search all channels because the producing and broadcasting station may differ."""
+		try:
+			title = sub(r"\s*\(\d+\)\s*$", "", _u(title)).strip()
+			if not title:
+				self.openMain(session)
+				return
+			_self_heal_all_serviceapp_backups(session)
+			OeMediathekMainScreen.load_order()
+			_log(f"EventInfo search: {title}")
+			session.open(OeMediathekScreen, "Alle Mediatheken", get_all_highlights, initialSearch=title)
+		except Exception:
+			_log(f"EventInfo search failed: {_fmt_exc()}")
+			self.openMain(session)
+
+	def openUpcomingSearch(self, session):
+		choices = self.resolveUpcomingShows(session)
+		if not choices:
+			self.openMain(session)
+			return
+
+		def onChosen(title):
+			if title:
+				self.openSearch(session, title)
+
+		try:
+			session.openWithCallback(onChosen, OeMediathekPickerScreen, title="Kommende Sendung wählen:", choices=choices)
+		except Exception:
+			_log(f"EventInfo upcoming picker failed: {_fmt_exc()}")
+			self.openMain(session)
+
+
+eventInfoHelper = EventInfoHelper()
+
+
+def mainFromEventInfo(session, **kwargs):
+	eventInfoHelper.openSearch(session, eventInfoHelper.resolveRunningShow(session))
+
+
+def mainFromEventInfoUpcoming(session, **kwargs):
+	eventInfoHelper.openUpcomingSearch(session)
+
+
 def Plugins(**kwargs):
-    return PluginDescriptor(
-        name="ÖR Mediathek",
-        description="Alle öffentlich-rechtlichen Mediatheken",
-        where=[PluginDescriptor.WHERE_PLUGINMENU, PluginDescriptor.WHERE_EXTENSIONSMENU],
-        icon="plugin.png",
-        fnc=main,
-    )
+	return [PluginDescriptor(
+		name="ÖR Mediathek",
+		description="Alle öffentlich-rechtlichen Mediatheken",
+		where=[PluginDescriptor.WHERE_PLUGINMENU, PluginDescriptor.WHERE_EXTENSIONSMENU],
+		icon="plugin.png",
+		fnc=main,
+	), PluginDescriptor(
+		name="ÖR Mediathek: laufende Sendung suchen",
+		description="Sucht die aktuell laufende Sendung in der Mediathek",
+		where=[PluginDescriptor.WHERE_EVENTINFO],
+		icon="plugin.png",
+		fnc=mainFromEventInfo,
+	), PluginDescriptor(
+		name="ÖR Mediathek: kommende Sendung suchen",
+		description="Zeigt kommende Sendungen des aktuellen Senders zur Mediathek-Suche",
+		where=[PluginDescriptor.WHERE_EVENTINFO],
+		icon="plugin.png",
+		fnc=mainFromEventInfoUpcoming,
+	)]

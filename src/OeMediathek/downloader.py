@@ -350,27 +350,30 @@ def convert_mp4_to_ts(mp4_path, on_done=None, on_error=None):
 
 
 def _sanitize(text):
-    text = _to_text(text)
-    allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -_äöüÄÖÜß")
-    return "".join(c for c in text if c in allowed).strip()
+	text = _to_text(text)
+	for character in '\\/:*?"<>|\x00':
+		text = text.replace(character, "_")
+	return " ".join(text.split()).strip(" .")
 
 
 def _make_filename(title, url, topic=None):
-    # m3u8 Playlisten werden als Enigma2-freundliche .ts Datei gespeichert
-    url = _to_text(url)
-    title = _to_text(title)
-    topic = _to_text(topic)
-    ext = ".ts" if url.split("?")[0].lower().endswith((".m3u8", ".m3u")) else ".mp4"
-    safe_title = _sanitize(title) or "download"
-    if topic:
-        safe_topic = _sanitize(topic)
-        if safe_topic and safe_topic.lower() != safe_title.lower():
-            combined = safe_topic + " - " + safe_title
-        else:
-            combined = safe_title
-    else:
-        combined = safe_title
-    return combined[:100] + ext
+	# m3u8 Playlisten werden als Enigma2-freundliche .ts Datei gespeichert
+	url = _to_text(url)
+	title = _to_text(title)
+	topic = _to_text(topic)
+	ext = ".ts" if url.split("?")[0].lower().endswith((".m3u8", ".m3u")) else ".mp4"
+	safeTitle = _sanitize(title) or "download"
+	if topic:
+		safeTopic = _sanitize(topic)
+		if safeTopic and safeTopic.lower() != safeTitle.lower():
+			combined = f"{safeTopic} - {safeTitle}"
+		else:
+			combined = safeTitle
+	else:
+		combined = safeTitle
+	# Unicode can use four bytes per character. Leave room for suffixes and sidecars.
+	fileName = combined[:100].encode("utf-8")[:200].decode("utf-8", "ignore")
+	return f"{fileName}{ext}"
 
 
 def get_content_length(url):
